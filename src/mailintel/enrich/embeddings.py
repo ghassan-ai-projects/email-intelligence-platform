@@ -1,4 +1,9 @@
-"""Voyage embeddings stored in a sqlite-vec table (one vector per email)."""
+"""Embeddings stored in a sqlite-vec table (one vector per email).
+
+Two providers: Voyage (hosted, high quality) and any OpenAI-compatible
+embeddings API — which includes a fully local Ollama
+(`base_url = "http://localhost:11434/v1"`, e.g. model `nomic-embed-text`).
+"""
 
 from __future__ import annotations
 
@@ -43,6 +48,50 @@ class VoyageEmbedder:
 
     def embed_query(self, text: str) -> list[float]:
         return self._embed([text], "query")[0]
+
+
+class OpenAICompatEmbedder:
+    """Any /v1/embeddings endpoint: Ollama, LM Studio, OpenAI, ..."""
+
+    def __init__(self, cfg: EmbeddingsConfig):
+        from openai import OpenAI
+
+        if not cfg.base_url:
+            raise RuntimeError(
+                "embeddings.base_url is required for provider 'openai-compat' "
+                "(e.g. http://localhost:11434/v1 for Ollama)"
+            )
+        self.cfg = cfg
+        self.dimensions = cfg.dimensions
+        # Local endpoints like Ollama accept any key; hosted ones need a real one.
+        self.client = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key or "unused")
+
+    def _embed(self, texts: Sequence[str]) -> list[list[float]]:
+        resp = self.client.embeddings.create(model=self.cfg.model, input=list(texts))
+        vectors = [d.embedding for d in resp.data]
+        for v in vectors:
+            if len(v) != self.dimensions:
+                raise RuntimeError(
+                    f"Model '{self.cfg.model}' returned {len(v)}-dim vectors; "
+                    f"set embeddings.dimensions = {len(v)} in the config"
+                )
+        return vectors
+
+    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        return self._embed(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embed([text])[0]
+
+
+def make_embedder(cfg: EmbeddingsConfig) -> Embedder:
+    if cfg.provider == "voyage":
+        return VoyageEmbedder(cfg)
+    if cfg.provider == "openai-compat":
+        return OpenAICompatEmbedder(cfg)
+    raise RuntimeError(
+        f"Unknown embeddings.provider: {cfg.provider!r} (use 'voyage' or 'openai-compat')"
+    )
 
 
 def serialize_f32(vec: Sequence[float]) -> bytes:

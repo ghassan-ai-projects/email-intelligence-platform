@@ -6,11 +6,12 @@ db_path = "~/.mailintel/mail.db"
 
 [maildir]
 # Root of the Maildir tree that mbsync writes to.
+# Can also be set with the MAILINTEL_MAILDIR environment variable (wins over this).
 path = "~/Mail"
 # Any path segment matching these (case-insensitive) is treated as sent mail.
-sent_folders = ["Sent", "Sent Mail", "Sent Messages", "Sent Items"]
+sent_folders = ["Sent", "Sent Mail", "Sent Messages", "Sent Items", "Gesendet"]
 # Folders skipped entirely.
-exclude_folders = ["Trash", "Spam", "Junk", "Drafts"]
+exclude_folders = ["Trash", "Spam", "Junk", "Drafts", "Papierkorb", "Entwürfe", "Gelöscht"]
 
 [sync]
 # External synchronizer command; run by `mailintel sync` / `watch` / the sync_now MCP tool.
@@ -35,13 +36,37 @@ max_attachment_chars = 2000
 #   Anthropic:               provider = "anthropic", model = "claude-haiku-4-5-20251001", api_key_env = "ANTHROPIC_API_KEY"
 
 [embeddings]
+# provider "voyage" (hosted) or "openai-compat" (Ollama, LM Studio, OpenAI, ...).
+provider = "voyage"
 model = "voyage-3.5-lite"
 api_key_env = "VOYAGE_API_KEY"
 dimensions = 1024
 max_chars = 6000
 batch_size = 64
 
+# Fully local embeddings with Ollama (`ollama pull nomic-embed-text`):
+#   provider = "openai-compat"
+#   base_url = "http://localhost:11434/v1"
+#   model = "nomic-embed-text"
+#   dimensions = 768
+# Changing model/dimensions later requires re-embedding (drop vec_emails, re-enqueue).
+
 [enrich]
 max_attempts = 3
 # Remove "embed" to skip vector search, or "enrich" to skip LLM analysis.
 stages = ["attachments", "enrich", "embed"]
+
+[smtp]
+# Outgoing mail for the send_email MCP tool. OFF by default; enabling it lets
+# agents send mail, so keep the guardrails below tight.
+enabled = false
+host = "mail.gmx.net"                 # GMX example; smtp.gmail.com for Gmail
+port = 587
+starttls = true
+username_env = "EMAIL_USER"           # credentials live in ~/.mailintel/.env
+password_env = "EMAIL_PASSWORD"
+from_addr = ""                        # defaults to the username
+# Guardrail: if non-empty, every recipient must match one of these globs.
+allowed_recipients = []               # e.g. ["*@mycompany.com", "partner@client.de"]
+# Guardrail: local files may only be attached from these directories.
+attachment_dirs = []                  # e.g. ["~/Documents/outbox"]

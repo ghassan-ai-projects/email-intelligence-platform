@@ -21,6 +21,7 @@ from pathlib import Path
 import html2text
 
 from .config import Config
+from .security import sanitize_text
 from .threading_ import assign_thread, refresh_thread_stats
 
 _WS = re.compile(r"\s+")
@@ -154,13 +155,14 @@ def parse_message(path: Path) -> ParsedEmail:
 
     return ParsedEmail(
         message_id=message_id,
-        subject=_WS.sub(" ", msg.get("Subject") or "").strip(),
+        # sanitize_text strips control/invisible chars (prompt-injection hiding).
+        subject=sanitize_text(_WS.sub(" ", msg.get("Subject") or "").strip()),
         from_addr=from_addr,
-        from_name=from_name,
+        from_name=sanitize_text(from_name),
         date_utc=_parse_date(msg, path),
-        body_text=body,
+        body_text=sanitize_text(body),
         refs=_parse_refs(msg),
-        recipients=recipients,
+        recipients=[(k, a, sanitize_text(n)) for k, a, n in recipients],
         attachments=attachments,
         size=path.stat().st_size,
     )
