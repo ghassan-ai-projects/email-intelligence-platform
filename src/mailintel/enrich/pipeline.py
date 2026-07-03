@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from ..config import Config
+from ..events import emit
 from ..models import EnrichmentResult
 from ..security import sanitize_text
 from .attachments import extract_email_attachments
@@ -80,17 +81,37 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
     conn.execute("DELETE FROM email_entities WHERE email_id = ?", (email_id,))
 
     for item in result.action_items:
-        conn.execute(
+        description = sanitize_text(item.description)
+        cur = conn.execute(
             "INSERT INTO action_items (email_id, description, owner, due_date) "
             "VALUES (?, ?, ?, ?)",
-            (email_id, sanitize_text(item.description), item.owner, item.due_date),
+            (email_id, description, item.owner, item.due_date),
         )
+        emit(conn, "action_item_created", email_id, {
+            "action_item_id": cur.lastrowid,
+            "description": description,
+            "owner": item.owner,
+            "due_date": item.due_date,
+        })
     for fact in result.facts:
-        conn.execute(
+        fact_text = sanitize_text(fact.fact)
+        cur = conn.execute(
             "INSERT INTO facts (email_id, fact, category, due_date, confidence) "
             "VALUES (?, ?, ?, ?, ?)",
-            (email_id, sanitize_text(fact.fact), fact.category, fact.due_date, fact.confidence),
+            (email_id, fact_text, fact.category, fact.due_date, fact.confidence),
         )
+        emit(conn, "fact_extracted", email_id, {
+            "fact_id": cur.lastrowid,
+            "fact": fact_text,
+            "category": fact.category,
+            "due_date": fact.due_date,
+        })
+    emit(conn, "email_enriched", email_id, {
+        "importance": result.importance,
+        "sentiment": result.sentiment,
+        "summary": sanitize_text(result.summary),
+        "language": result.language,
+    })
     entity_lists = [
         ("person", result.entities.people),
         ("company", result.entities.companies),

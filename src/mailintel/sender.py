@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .config import Config
 from .enrich.attachments import load_attachment
+from .events import emit
 from .security import recipient_allowed
 
 
@@ -131,6 +132,10 @@ def send_email(
         server.login(username, password)
         server.send_message(msg)
 
+    emit(conn, "email_sent", in_reply_to_email_id, {
+        "to": to_addrs, "cc": cc_addrs, "subject": subject, "attachments": attached,
+    })
+    conn.commit()
     return {
         "status": "sent",
         "from": msg["From"],
