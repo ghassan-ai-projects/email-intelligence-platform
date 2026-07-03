@@ -21,6 +21,7 @@ from pathlib import Path
 import html2text
 
 from .config import Config
+from .events import emit
 from .security import sanitize_text
 from .threading_ import assign_thread, refresh_thread_stats
 
@@ -342,6 +343,13 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                     ).fetchone()
                     touched_threads.add(row["thread_id"])
                     stats.new += 1
+                    emit(conn, "email_ingested", email_id, {
+                        "subject": parsed.subject,
+                        "from": parsed.from_addr,
+                        "folder": folder,
+                        "date": parsed.date_utc,
+                        "has_attachments": bool(parsed.attachments),
+                    })
 
                 conn.execute(
                     "INSERT OR REPLACE INTO sync_state (folder, uniq, filename, email_id) "
@@ -358,10 +366,11 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
             ).fetchone()["n"]
             if remaining == 0:
                 row = conn.execute(
-                    "SELECT thread_id FROM emails WHERE id = ?", (email_id,)
+                    "SELECT thread_id, subject FROM emails WHERE id = ?", (email_id,)
                 ).fetchone()
                 if row:
                     touched_threads.add(row["thread_id"])
+                    emit(conn, "email_deleted", email_id, {"subject": row["subject"]})
                 conn.execute("DELETE FROM emails_fts WHERE rowid = ?", (email_id,))
                 try:
                     conn.execute("DELETE FROM vec_emails WHERE email_id = ?", (email_id,))

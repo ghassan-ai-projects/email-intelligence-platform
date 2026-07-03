@@ -13,6 +13,9 @@ IMAP ──mbsync──▶ Maildir (immutable source of truth)
                     │  entities, facts + Voyage embeddings
                     ▼
           MCP server (stdio) ──▶ Claude Code / any MCP agent
+                    │
+                    ▼
+   append-only events + write-back (tags, notes, done tasks) + drafts
 ```
 
 Everything lives in one SQLite file. No servers, no Docker, no UI.
@@ -34,6 +37,9 @@ Instead of `ReadEmail` / `SearchEmail`, the MCP server exposes knowledge-level t
 | `daily_summary` | digest of a day: important mail, new tasks, key facts |
 | `read_attachment` | attachment content: text for PDFs/text files, base64 for binaries |
 | `send_email` | SMTP send with attachments — **opt-in**, allowlist-guarded |
+| `create_draft` / `update_draft` / `list_drafts` / `send_draft` | draft-first outgoing mail, review before send |
+| `get_events_since` | reactive agent feed: new emails, enrichments, completed tasks, drafts |
+| `complete_action_item` / `set_importance` / `tag_email` / `add_email_note` | agent write-back so state is not re-discovered |
 | `get_stats` / `list_folders` / `sync_now` | store state and on-demand sync |
 
 ## Setup
@@ -69,6 +75,23 @@ claude mcp add mailintel -- mailintel serve
 ```
 
 `mailintel watch` keeps everything fresh in a loop (`sync.interval_minutes`).
+
+## Reactive agent loop, write-back and drafts
+
+Agents can react to changes instead of polling:
+
+- `get_events_since(cursor)` returns an append-only feed of `email_ingested`,
+  `email_deleted`, `email_enriched`, `action_item_created`, `fact_extracted`,
+  `action_item_completed`, `draft_created`, `draft_sent`, and `email_sent`.
+  Persist `next_cursor` and pass it on the next call to receive only the delta.
+- Write-back tools let agents record their work: `complete_action_item`,
+  `set_importance`, `tag_email`, `untag_email`, and `add_email_note`. Notes and
+  tags are shown in `get_email`, and completed action items drop out of
+  `find_action_items`.
+- Outgoing mail is draft-first: `create_draft` stores a message with no side
+  effects, `update_draft` refines it, and `send_draft` applies the same
+  `send_email` guardrails (`smtp.enabled`, `allowed_recipients`) at delivery
+  time. Prefer this flow for any mail an agent prepares.
 
 ## Multi-provider enrichment & embeddings
 
@@ -132,7 +155,8 @@ uv run pytest       # fixture Maildir, fake LLM/embedders — no keys needed
 Layout: `src/mailintel/` — `ingest.py` (Maildir → SQLite), `threading_.py`
 (conversation graph), `search.py` (FTS), `enrich/` (LLM providers, prompts,
 Voyage + sqlite-vec, job pipeline), `knowledge.py` (facts/tasks/digests),
-`mcp_server.py` (tools), `cli.py`.
+`events.py` (append-only change feed), `actions.py` (write-back), `drafts.py`
+(draft-first outgoing mail), `mcp_server.py` (tools), `cli.py`.
 
-Future work: OCR for scanned attachments, event webhooks for new-knowledge
-notifications, promotion of high-value facts into shared agent memory (ALMS).
+Future work: OCR for scanned attachments, promotion of high-value facts into
+shared agent memory (ALMS), and webhook-style forwarding of selected events.

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import sqlite_vec
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE emails (
@@ -137,6 +137,44 @@ CREATE VIRTUAL TABLE emails_fts USING fts5(subject, body_text, from_text);
 """
 
 
+# v2: agent-loop support — append-only event log (cursor-consumed by agents),
+# email tags + notes (write-back), and drafts (draft-first sending).
+_SCHEMA_V2 = """
+CREATE TABLE events (
+    id         INTEGER PRIMARY KEY,
+    type       TEXT NOT NULL,
+    email_id   INTEGER,
+    payload    TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX idx_events_type ON events(type, id);
+
+CREATE TABLE email_tags (
+    email_id INTEGER NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
+    tag      TEXT NOT NULL,
+    UNIQUE(email_id, tag)
+);
+CREATE INDEX idx_email_tags_tag ON email_tags(tag);
+
+CREATE TABLE drafts (
+    id                    INTEGER PRIMARY KEY,
+    to_addrs              TEXT NOT NULL,
+    cc_addrs              TEXT NOT NULL DEFAULT '[]',
+    subject               TEXT NOT NULL DEFAULT '',
+    body                  TEXT NOT NULL DEFAULT '',
+    in_reply_to_email_id  INTEGER,
+    attachment_ids        TEXT NOT NULL DEFAULT '[]',
+    status                TEXT NOT NULL DEFAULT 'draft',
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL,
+    sent_at               TEXT
+);
+
+ALTER TABLE emails ADD COLUMN agent_notes TEXT;
+ALTER TABLE action_items ADD COLUMN completed_at TEXT;
+"""
+
+
 def connect(db_path: Path | str) -> sqlite3.Connection:
     path = Path(db_path)
     if str(path) != ":memory:":
@@ -158,6 +196,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         return
     if version < 1:
         conn.executescript(_SCHEMA)
+    if version < 2:
+        conn.executescript(_SCHEMA_V2)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 

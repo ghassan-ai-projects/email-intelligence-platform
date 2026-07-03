@@ -51,6 +51,7 @@ def search_emails(
     date_to: str | None = None,
     has_attachments: bool | None = None,
     unread_only: bool = False,
+    tag: str | None = None,
     limit: int = 20,
 ) -> list[dict]:
     where: list[str] = []
@@ -81,6 +82,9 @@ def search_emails(
         params.append(int(has_attachments))
     if unread_only:
         where.append("e.is_read = 0")
+    if tag:
+        where.append("e.id IN (SELECT email_id FROM email_tags WHERE tag = ?)")
+        params.append(tag.lower().strip())
 
     sql = "SELECT e.* FROM emails e"
     if where:
@@ -136,6 +140,13 @@ def get_email(conn: sqlite3.Connection, email_id: int) -> dict | None:
             (email_id,),
         )
     ]
+    d["tags"] = [
+        r["tag"]
+        for r in conn.execute(
+            "SELECT tag FROM email_tags WHERE email_id = ? ORDER BY tag", (email_id,)
+        )
+    ]
+    d["agent_notes"] = row["agent_notes"]
     return d
 
 
