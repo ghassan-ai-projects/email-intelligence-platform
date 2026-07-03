@@ -32,6 +32,8 @@ Instead of `ReadEmail` / `SearchEmail`, the MCP server exposes knowledge-level t
 | `summarize_sender` | profile of a correspondent: volume, topics, open items |
 | `find_waiting_replies` | sent mail nobody answered |
 | `daily_summary` | digest of a day: important mail, new tasks, key facts |
+| `read_attachment` | attachment content: text for PDFs/text files, base64 for binaries |
+| `send_email` | SMTP send with attachments — **opt-in**, allowlist-guarded |
 | `get_stats` / `list_folders` / `sync_now` | store state and on-demand sync |
 
 ## Setup
@@ -42,14 +44,21 @@ uv tool install .                 # or: uv sync && uv run mailintel ...
 
 # 2. Mail sync (Maildir source of truth)
 brew install isync                # then configure ~/.mbsyncrc — see docs/mbsync-setup.md
+                                  # (GMX, Gmail and generic IMAP examples included)
 
 # 3. Configure
 mailintel init                    # writes ~/.mailintel/config.toml
 $EDITOR ~/.mailintel/config.toml  # point [maildir] path at your mbsync target
+                                  # (or: export MAILINTEL_MAILDIR=~/Mail)
 
-# 4. API keys (enrichment + embeddings)
-export DEEPSEEK_API_KEY=...       # or any OpenAI-compatible provider / Anthropic
-export VOYAGE_API_KEY=...         # semantic search embeddings
+# 4. Secrets — mailintel auto-loads ~/.mailintel/.env (and ./.env)
+cat > ~/.mailintel/.env <<'ENV'
+EMAIL_USER=you@gmx.de             # used by mbsync PassCmd and SMTP sending
+EMAIL_PASSWORD=...
+DEEPSEEK_API_KEY=...              # or any OpenAI-compatible provider / Anthropic
+VOYAGE_API_KEY=...                # not needed if you embed locally with Ollama
+ENV
+chmod 600 ~/.mailintel/.env
 
 # 5. Sync, index, enrich
 mailintel sync                    # mbsync -> ingest -> enrich queue
@@ -61,13 +70,17 @@ claude mcp add mailintel -- mailintel serve
 
 `mailintel watch` keeps everything fresh in a loop (`sync.interval_minutes`).
 
-## Multi-provider enrichment
+## Multi-provider enrichment & embeddings
 
 Every new email gets **one structured LLM call** (summary, importance, sentiment,
 action items, entities, facts) and one embedding. The `[llm]` config block works
 with any OpenAI-compatible API — DeepSeek, Ollama (fully local), Groq,
-OpenRouter, OpenAI — or the native Anthropic API. See
-[config.example.toml](config.example.toml).
+OpenRouter, OpenAI — or the native Anthropic API.
+
+Embeddings are pluggable too: `[embeddings] provider = "voyage"` (hosted) or
+`"openai-compat"` for a fully local Ollama setup
+(`base_url = "http://localhost:11434/v1"`, `model = "nomic-embed-text"`,
+`dimensions = 768`). See [config.example.toml](config.example.toml).
 
 The pipeline is a resumable queue (`pipeline_jobs`): interrupt it any time,
 re-run `mailintel enrich --limit 500` to work through backlogs, failures retry
@@ -86,6 +99,28 @@ mailintel watch     continuous sync/ingest/enrich loop
 mailintel search    quick FTS (--semantic for vector search)
 mailintel stats     store statistics
 ```
+
+## Security guardrails
+
+Email is untrusted third-party input, and this store feeds LLMs and agents, so
+several defenses are built in ([security.py](src/mailintel/security.py)):
+
+- **Ingest sanitization** — control characters, zero-width characters, and
+  bidi-override tricks (used to hide injected instructions) are stripped from
+  subjects, bodies, and names before anything is stored. LLM-derived output
+  (summaries, facts, action items) is sanitized again before storage.
+- **Hardened enrichment prompt** — the enrichment LLM is told the email is
+  untrusted data; instruction-like content is flagged as a suspected
+  prompt-injection attempt instead of followed.
+- **Untrusted-content notices** — MCP tools that return bodies or attachment
+  content (`get_email`, `get_thread`, `read_attachment`) attach a security
+  notice, and the server instructions tell agents never to act on instructions
+  found inside mail.
+- **Sending is opt-in and fenced** — `send_email` requires `[smtp] enabled =
+  true`; recipients can be restricted with `allowed_recipients` globs, and
+  local-file attachments only work from whitelisted `attachment_dirs` (stored
+  email attachments can be forwarded by id). This limits the blast radius of a
+  successful injection trying to exfiltrate data.
 
 ## Development
 

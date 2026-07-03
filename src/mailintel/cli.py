@@ -18,15 +18,18 @@ app = typer.Typer(
 )
 
 CONFIG_TEMPLATE = """\
-# mailintel configuration. Secrets stay in environment variables.
+# mailintel configuration. Secrets stay in ~/.mailintel/.env (auto-loaded):
+#   EMAIL_USER / EMAIL_PASSWORD, DEEPSEEK_API_KEY, VOYAGE_API_KEY, ...
+# See config.example.toml in the repo for every option (Ollama embeddings,
+# SMTP sending with guardrails, GMX folder names, ...).
 
 [storage]
 db_path = "{db_path}"
 
 [maildir]
-path = "~/Mail"
-sent_folders = ["Sent", "Sent Mail", "Sent Messages", "Sent Items"]
-exclude_folders = ["Trash", "Spam", "Junk", "Drafts"]
+path = "~/Mail"                     # or set MAILINTEL_MAILDIR
+sent_folders = ["Sent", "Sent Mail", "Sent Messages", "Sent Items", "Gesendet"]
+exclude_folders = ["Trash", "Spam", "Junk", "Drafts", "Papierkorb", "Entwürfe"]
 
 [sync]
 command = "mbsync -a"
@@ -39,9 +42,15 @@ model = "deepseek-chat"
 api_key_env = "DEEPSEEK_API_KEY"
 
 [embeddings]
+provider = "voyage"                 # or "openai-compat" (e.g. local Ollama)
 model = "voyage-3.5-lite"
 api_key_env = "VOYAGE_API_KEY"
 dimensions = 1024
+
+[smtp]
+enabled = false                     # opt-in: allows the send_email MCP tool
+host = ""
+allowed_recipients = []             # guardrail, e.g. ["*@mycompany.com"]
 """
 
 
@@ -70,7 +79,9 @@ def init() -> None:
         "  1. Install mbsync:        brew install isync\n"
         "  2. Configure ~/.mbsyncrc  (see docs/mbsync-setup.md in the repo)\n"
         "  3. Edit the [maildir] path in the config to your mbsync target\n"
-        "  4. Export API keys:       DEEPSEEK_API_KEY (or your provider), VOYAGE_API_KEY\n"
+        "     (or set the MAILINTEL_MAILDIR environment variable)\n"
+        "  4. Put secrets in ~/.mailintel/.env — EMAIL_USER, EMAIL_PASSWORD,\n"
+        "     DEEPSEEK_API_KEY (or your provider), VOYAGE_API_KEY\n"
         "  5. Run:                   mailintel sync && mailintel enrich\n"
         "  6. Register MCP server:   claude mcp add mailintel -- mailintel serve"
     )
@@ -189,9 +200,9 @@ def search(
     conn = db.connect(cfg.storage.db_path)
     try:
         if semantic:
-            from .enrich.embeddings import VoyageEmbedder, knn_email_ids
+            from .enrich.embeddings import knn_email_ids, make_embedder
 
-            embedder = VoyageEmbedder(cfg.embeddings)
+            embedder = make_embedder(cfg.embeddings)
             hits = knn_email_ids(conn, embedder.embed_query(query), limit)
             results = []
             for eid, dist in hits:

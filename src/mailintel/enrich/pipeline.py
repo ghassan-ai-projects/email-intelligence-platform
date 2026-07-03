@@ -13,12 +13,13 @@ from datetime import UTC, datetime
 
 from ..config import Config
 from ..models import EnrichmentResult
+from ..security import sanitize_text
 from .attachments import extract_email_attachments
 from .embeddings import (
     Embedder,
-    VoyageEmbedder,
     embedding_input,
     ensure_vec_table,
+    make_embedder,
     store_embeddings,
 )
 from .llm import LLMProvider, make_provider
@@ -66,7 +67,7 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
         "enriched_at = ? WHERE id = ?",
         (
             result.language,
-            result.summary,
+            sanitize_text(result.summary),
             result.importance,
             result.sentiment,
             _now(),
@@ -82,13 +83,13 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
         conn.execute(
             "INSERT INTO action_items (email_id, description, owner, due_date) "
             "VALUES (?, ?, ?, ?)",
-            (email_id, item.description, item.owner, item.due_date),
+            (email_id, sanitize_text(item.description), item.owner, item.due_date),
         )
     for fact in result.facts:
         conn.execute(
             "INSERT INTO facts (email_id, fact, category, due_date, confidence) "
             "VALUES (?, ?, ?, ?, ?)",
-            (email_id, fact.fact, fact.category, fact.due_date, fact.confidence),
+            (email_id, sanitize_text(fact.fact), fact.category, fact.due_date, fact.confidence),
         )
     entity_lists = [
         ("person", result.entities.people),
@@ -168,7 +169,7 @@ def run_embed_stage(
     ).fetchall()
     if not jobs:
         return 0, 0
-    embedder = embedder or VoyageEmbedder(cfg.embeddings)
+    embedder = embedder or make_embedder(cfg.embeddings)
     ensure_vec_table(conn, embedder.dimensions, cfg.embeddings.model)
 
     done = failed = 0
