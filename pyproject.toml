@@ -1,0 +1,42 @@
+[project]
+name = "mailintel"
+version = "0.1.0"
+description = "Local-first email intelligence platform: Maildir -> SQLite knowledge base -> MCP tools for agents"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.2.0",
+    "pydantic>=2.7",
+    "typer>=0.12",
+    "openai>=1.40",
+    "anthropic>=0.40",
+    "voyageai>=0.3",
+    "sqlite-vec>=0.1.6",
+    "html2text>=2024.2.26",
+    "pypdf>=5.0",
+    "watchdog>=4.0",
+]
+
+[project.scripts]
+mailintel = "mailintel.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mailintel"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
