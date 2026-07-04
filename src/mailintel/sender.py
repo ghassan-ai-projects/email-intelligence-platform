@@ -44,8 +44,7 @@ def check_send_rate(conn: sqlite3.Connection, cfg: Config) -> None:
     ).fetchone()[0]
     if count >= cap:
         raise SendError(
-            f"Rate limit exceeded: {cap} send(s) per hour. "
-            "Wait or raise smtp.max_sends_per_hour."
+            f"Rate limit exceeded: {cap} send(s) per hour. Wait or raise smtp.max_sends_per_hour."
         )
 
 
@@ -128,24 +127,26 @@ def send_email(
         filename, mime, data = loaded
         maintype, _, subtype = (mime or "application/octet-stream").partition("/")
         msg.add_attachment(
-            data, maintype=maintype, subtype=subtype or "octet-stream",
+            data,
+            maintype=maintype,
+            subtype=subtype or "octet-stream",
             filename=filename or f"attachment-{att_id}",
         )
         attached.append(filename or str(att_id))
 
     if attachment_paths:
         if not smtp.attachment_dirs:
-            raise SendError(
-                "Local-file attachments are disabled: configure smtp.attachment_dirs"
-            )
+            raise SendError("Local-file attachments are disabled: configure smtp.attachment_dirs")
         for path_str in attachment_paths:
             path = _resolve_local_file(path_str, smtp.attachment_dirs)
             import mimetypes
 
-            mime, _ = mimetypes.guess_type(path.name)
-            maintype, _, subtype = (mime or "application/octet-stream").partition("/")
+            mime_type, _ = mimetypes.guess_type(path.name)
+            maintype, _, subtype = (mime_type or "application/octet-stream").partition("/")
             msg.add_attachment(
-                path.read_bytes(), maintype=maintype, subtype=subtype or "octet-stream",
+                path.read_bytes(),
+                maintype=maintype,
+                subtype=subtype or "octet-stream",
                 filename=path.name,
             )
             attached.append(path.name)
@@ -159,12 +160,23 @@ def send_email(
     # Use the account of the email being replied to, if any, otherwise default.
     account = "default"
     if in_reply_to_email_id is not None:
-        row = conn.execute("SELECT account FROM emails WHERE id = ?", (in_reply_to_email_id,)).fetchone()
+        row = conn.execute(
+            "SELECT account FROM emails WHERE id = ?", (in_reply_to_email_id,)
+        ).fetchone()
         if row:
             account = row["account"]
-    emit(conn, "email_sent", in_reply_to_email_id, {
-        "to": to_addrs, "cc": cc_addrs, "subject": subject, "attachments": attached,
-    }, account=account)
+    emit(
+        conn,
+        "email_sent",
+        in_reply_to_email_id,
+        {
+            "to": to_addrs,
+            "cc": cc_addrs,
+            "subject": subject,
+            "attachments": attached,
+        },
+        account=account,
+    )
     conn.commit()
     return {
         "status": "sent",

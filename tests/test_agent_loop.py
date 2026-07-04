@@ -9,8 +9,7 @@ from mailintel.enrich.pipeline import run_pipeline
 from mailintel.events import get_events_since
 from mailintel.ingest import ingest
 from mailintel.search import get_email, search_emails
-
-from test_enrich import FakeEmbedder, FakeProvider
+from tests.test_enrich import FakeEmbedder, FakeProvider
 
 
 def _setup(conn, cfg):
@@ -98,9 +97,9 @@ def test_set_importance_clamps(conn, cfg):
 
 def test_tags_roundtrip_and_search_filter(conn, cfg):
     _setup(conn, cfg)
-    eid = conn.execute(
-        "SELECT id FROM emails WHERE message_id = '<m3@example.com>'"
-    ).fetchone()["id"]
+    eid = conn.execute("SELECT id FROM emails WHERE message_id = '<m3@example.com>'").fetchone()[
+        "id"
+    ]
     actions.tag_email(conn, eid, "  Invoice ")  # normalized to lowercase
     actions.tag_email(conn, eid, "triaged")
     assert actions.get_tags(conn, eid) == ["invoice", "triaged"]
@@ -132,7 +131,10 @@ def test_agent_notes_accumulate(conn, cfg):
 def test_draft_lifecycle(conn, cfg):
     _setup(conn, cfg)
     d = drafts.create_draft(
-        conn, ["dave@client.example"], "Re: contract", "Following up.",
+        conn,
+        ["dave@client.example"],
+        "Re: contract",
+        "Following up.",
     )
     assert d["status"] == "draft"
     draft_id = d["draft_id"]
@@ -188,7 +190,10 @@ def test_send_draft_happy_path(conn, cfg, monkeypatch):
         "SELECT id, message_id FROM emails WHERE message_id = '<m1@example.com>'"
     ).fetchone()
     d = drafts.create_draft(
-        conn, ["alice@example.com"], "Re: upgrade", "On it.",
+        conn,
+        ["alice@example.com"],
+        "Re: upgrade",
+        "On it.",
         in_reply_to_email_id=reply_to["id"],
     )
     result = drafts.send_draft(conn, cfg, d["draft_id"])
@@ -201,7 +206,9 @@ def test_send_draft_happy_path(conn, cfg, monkeypatch):
     assert "error" in drafts.update_draft(conn, d["draft_id"], body="x")
     assert "error" in drafts.delete_draft(conn, d["draft_id"])
     # events recorded
-    types = [e["type"] for e in get_events_since(conn, types=["draft_sent", "email_sent"])["events"]]
+    types = [
+        e["type"] for e in get_events_since(conn, types=["draft_sent", "email_sent"])["events"]
+    ]
     assert "draft_sent" in types and "email_sent" in types
 
 

@@ -54,11 +54,21 @@ class MaildirConfig(BaseModel):
     # Folder names (any path segment, case-insensitive) treated as sent mail.
     # German names cover GMX / web.de accounts.
     sent_folders: list[str] = [
-        "Sent", "Sent Mail", "Sent Messages", "Sent Items", "Gesendet",
+        "Sent",
+        "Sent Mail",
+        "Sent Messages",
+        "Sent Items",
+        "Gesendet",
     ]
     # Folders skipped entirely during ingest (matched per path segment, case-insensitive).
     exclude_folders: list[str] = [
-        "Trash", "Spam", "Junk", "Drafts", "Papierkorb", "Entwürfe", "Gelöscht",
+        "Trash",
+        "Spam",
+        "Junk",
+        "Drafts",
+        "Papierkorb",
+        "Entwürfe",
+        "Gelöscht",
     ]
 
     @field_validator("path", mode="after")
@@ -162,7 +172,7 @@ def load_config(path: Path | None = None) -> Config:
     load_env_files()
     path = path or config_path()
     if path.exists():
-        with open(path, "rb") as f:
+        with path.open("rb") as f:
             data = tomllib.load(f)
         cfg = Config.model_validate(data)
     else:

@@ -54,8 +54,10 @@ class EnrichmentResult(BaseModel):
     @field_validator("importance", mode="before")
     @classmethod
     def _clamp_importance(cls, v: object) -> int:
+        if not isinstance(v, int | float | str | bytes | bytearray):
+            return 3
         try:
-            return min(5, max(1, int(v)))  # type: ignore[arg-type]
+            return min(5, max(1, int(v)))
         except (TypeError, ValueError):
             return 3
 

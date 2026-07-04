@@ -9,8 +9,7 @@ import pytest
 from mailintel import drafts, mcp_server, sender
 from mailintel.enrich.pipeline import run_pipeline
 from mailintel.ingest import ingest
-
-from test_enrich import FakeEmbedder, FakeProvider
+from tests.test_enrich import FakeEmbedder, FakeProvider
 
 
 def _setup(conn, cfg):

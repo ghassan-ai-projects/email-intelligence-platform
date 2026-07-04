@@ -22,7 +22,7 @@ class FakeProvider:
     def __init__(self):
         self.calls = 0
 
-    def complete_json(self, system: str, user: str) -> dict:
+    def complete_json(self, _system: str, user: str) -> dict:
         self.calls += 1
         subject = user.splitlines()[3].removeprefix("Subject: ")
         is_k8s_root = subject == "Kubernetes cluster upgrade"
@@ -32,8 +32,13 @@ class FakeProvider:
             "importance": 4 if is_k8s_root else 2,
             "sentiment": "neutral",
             "action_items": (
-                [{"description": "Prepare migration checklist", "owner": "Bob",
-                  "due_date": "2025-06-10"}]
+                [
+                    {
+                        "description": "Prepare migration checklist",
+                        "owner": "Bob",
+                        "due_date": "2025-06-10",
+                    }
+                ]
                 if is_k8s_root
                 else []
             ),
@@ -44,8 +49,14 @@ class FakeProvider:
                 "topics": ["kubernetes"] if "Kubernetes" in user else ["billing"],
             },
             "facts": (
-                [{"fact": "Invoice of $420 due July 12", "category": "deadline",
-                  "due_date": "2025-07-12", "confidence": 0.95}]
+                [
+                    {
+                        "fact": "Invoice of $420 due July 12",
+                        "category": "deadline",
+                        "due_date": "2025-07-12",
+                        "confidence": 0.95,
+                    }
+                ]
                 if "Invoice" in user
                 else []
             ),
@@ -80,17 +91,14 @@ def test_pipeline_runs_all_stages(conn, cfg):
     assert stats.done.get("attachments") == 1
     assert provider.calls == 5
     assert not stats.failed
-    assert (
-        conn.execute("SELECT COUNT(*) FROM emails WHERE enriched_at IS NULL").fetchone()[0]
-        == 0
-    )
+    assert conn.execute("SELECT COUNT(*) FROM emails WHERE enriched_at IS NULL").fetchone()[0] == 0
 
 
 def test_enrichment_stored(conn, cfg):
     _enrich_all(conn, cfg)
-    eid = conn.execute(
-        "SELECT id FROM emails WHERE message_id = '<m1@example.com>'"
-    ).fetchone()["id"]
+    eid = conn.execute("SELECT id FROM emails WHERE message_id = '<m1@example.com>'").fetchone()[
+        "id"
+    ]
     d = get_email(conn, eid)
     assert d["summary"].startswith("Summary of: Kubernetes")
     assert d["importance"] == 4
@@ -111,9 +119,7 @@ def test_semantic_knn(conn, cfg):
     # Embedding input for m1 = subject + summary + body; reproduce it exactly.
     from mailintel.enrich.embeddings import embedding_input
 
-    row = conn.execute(
-        "SELECT * FROM emails WHERE message_id = '<m1@example.com>'"
-    ).fetchone()
+    row = conn.execute("SELECT * FROM emails WHERE message_id = '<m1@example.com>'").fetchone()
     query_vec = embedder.embed_query(embedding_input(row, cfg.embeddings.max_chars))
     hits = knn_email_ids(conn, query_vec, 3)
     assert hits[0][0] == row["id"]
@@ -135,7 +141,7 @@ def test_failed_enrich_retries_then_gives_up(conn, cfg):
         def __init__(self):
             self.calls = 0
 
-        def complete_json(self, system, user):
+        def complete_json(self, _system, _user):
             self.calls += 1
             raise RuntimeError("api down")
 

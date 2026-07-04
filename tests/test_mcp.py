@@ -7,8 +7,7 @@ import pytest
 from mailintel import mcp_server
 from mailintel.enrich.pipeline import run_pipeline
 from mailintel.ingest import ingest
-
-from test_enrich import FakeEmbedder, FakeProvider
+from tests.test_enrich import FakeEmbedder, FakeProvider
 
 
 @pytest.fixture
@@ -26,10 +25,21 @@ def test_tools_registered():
     tools = anyio.run(mcp_server.mcp.list_tools)
     names = {t.name for t in tools}
     assert {
-        "search_emails", "semantic_search", "related_emails", "get_email", "get_thread",
-        "search_threads", "find_action_items", "find_decisions", "search_facts",
-        "summarize_sender", "find_waiting_replies", "daily_summary", "list_folders",
-        "get_stats", "sync_now",
+        "search_emails",
+        "semantic_search",
+        "related_emails",
+        "get_email",
+        "get_thread",
+        "search_threads",
+        "find_action_items",
+        "find_decisions",
+        "search_facts",
+        "summarize_sender",
+        "find_waiting_replies",
+        "daily_summary",
+        "list_folders",
+        "get_stats",
+        "sync_now",
     } <= names
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from mailintel.config import EmbeddingsConfig
@@ -25,7 +27,7 @@ def test_factory_selects_openai_compat():
 
 
 def test_factory_rejects_unknown_provider():
-    with pytest.raises(RuntimeError, match="Unknown embeddings.provider"):
+    with pytest.raises(RuntimeError, match=r"Unknown embeddings\.provider"):
         make_embedder(EmbeddingsConfig(provider="nope"))
 
 
@@ -53,11 +55,12 @@ def test_openai_compat_dimension_mismatch_message(monkeypatch):
         embedding = [0.1] * 768
 
     class FakeResp:
-        data = [FakeData()]
+        data: ClassVar = [FakeData()]
 
-    monkeypatch.setattr(
-        embedder.client.embeddings, "create", lambda **kw: FakeResp()
-    )
+    def create_dimension_mismatch(**_kwargs):
+        return FakeResp()
+
+    monkeypatch.setattr(embedder.client.embeddings, "create", create_dimension_mismatch)
     with pytest.raises(RuntimeError, match="dimensions = 768"):
         embedder.embed_query("hello")
 
@@ -79,10 +82,14 @@ def test_openai_compat_embeds(monkeypatch):
         def __init__(self, n):
             self.data = [FakeData([0.1, 0.2, 0.3, 0.4]) for _ in range(n)]
 
+    def create_embeddings(model, input):
+        _ = model
+        return FakeResp(len(input))
+
     monkeypatch.setattr(
         embedder.client.embeddings,
         "create",
-        lambda model, input: FakeResp(len(input)),
+        create_embeddings,
     )
     assert embedder.embed_query("q") == [0.1, 0.2, 0.3, 0.4]
     assert len(embedder.embed_documents(["a", "b"])) == 2

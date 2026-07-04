@@ -13,6 +13,7 @@ import email.utils
 import hashlib
 import re
 import sqlite3
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.message import EmailMessage
@@ -92,6 +93,8 @@ def _extract_body(msg: EmailMessage) -> str:
         content = part.get_content()
     except Exception:
         payload = part.get_payload(decode=True) or b""
+        if not isinstance(payload, bytes):
+            payload = b""
         content = payload.decode("utf-8", errors="replace")
     if part.get_content_type() == "text/html":
         content = _html_to_text(content)
@@ -109,7 +112,10 @@ def _parse_refs(msg: EmailMessage) -> list[str]:
 
 def _parse_date(msg: EmailMessage, path: Path) -> str:
     try:
-        dt = email.utils.parsedate_to_datetime(msg.get("Date"))
+        raw_date = msg.get("Date")
+        if not isinstance(raw_date, str):
+            raise ValueError("missing Date header")
+        dt = email.utils.parsedate_to_datetime(raw_date)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
     except Exception:
@@ -126,12 +132,12 @@ def _addresses(msg: EmailMessage, header: str) -> list[tuple[str, str]]:
 
 
 def parse_message(path: Path) -> ParsedEmail:
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         msg: EmailMessage = email.message_from_binary_file(f, policy=email.policy.default)
 
     message_id = (msg.get("Message-ID") or "").strip()
     if not message_id:
-        with open(path, "rb") as f:
+        with path.open("rb") as f:
             message_id = f"<mailintel-{hashlib.sha256(f.read()).hexdigest()[:32]}>"
 
     from_pairs = _addresses(msg, "From")
@@ -146,9 +152,7 @@ def parse_message(path: Path) -> ParsedEmail:
     try:
         for part in msg.iter_attachments():
             payload = part.get_payload(decode=True) or b""
-            attachments.append(
-                (part.get_filename() or "", part.get_content_type(), len(payload))
-            )
+            attachments.append((part.get_filename() or "", part.get_content_type(), len(payload)))
     except Exception:
         pass
 
@@ -178,7 +182,7 @@ def iter_maildirs(root: Path) -> list[tuple[str, Path]]:
 
     def folder_name(p: Path) -> str:
         rel = p.relative_to(root)
-        if rel == Path("."):
+        if rel == Path():
             return "INBOX"
         parts: list[str] = []
         for seg in rel.parts:
@@ -216,7 +220,9 @@ def _fts_upsert(conn: sqlite3.Connection, email_id: int, parsed: ParsedEmail) ->
     )
 
 
-def _enqueue_jobs(conn: sqlite3.Connection, email_id: int, parsed: ParsedEmail, cfg: Config) -> None:
+def _enqueue_jobs(
+    conn: sqlite3.Connection, email_id: int, parsed: ParsedEmail, cfg: Config
+) -> None:
     stages = list(cfg.enrich.stages)
     if "attachments" in stages and not any(
         mime == "application/pdf" or fn.lower().endswith(".pdf")
@@ -225,7 +231,8 @@ def _enqueue_jobs(conn: sqlite3.Connection, email_id: int, parsed: ParsedEmail, 
         stages.remove("attachments")
     for stage in stages:
         conn.execute(
-            "INSERT OR IGNORE INTO pipeline_jobs (email_id, stage, status) VALUES (?, ?, 'pending')",
+            "INSERT OR IGNORE INTO pipeline_jobs (email_id, stage, status) "
+            "VALUES (?, ?, 'pending')",
             (email_id, stage),
         )
 
@@ -246,7 +253,8 @@ def _insert_email(
     snippet = _WS.sub(" ", parsed.body_text)[:SNIPPET_LEN].strip()
     cur = conn.execute(
         "INSERT INTO emails (message_id, thread_id, folder, maildir_path, subject, from_addr, "
-        "from_name, date_utc, body_text, snippet, size, has_attachments, is_sent, is_read, account) "
+        "from_name, date_utc, body_text, snippet, size, has_attachments, "
+        "is_sent, is_read, account) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             parsed.message_id,
@@ -267,6 +275,7 @@ def _insert_email(
         ),
     )
     email_id = cur.lastrowid
+    assert email_id is not None
     for ref in parsed.refs:
         conn.execute(
             "INSERT INTO email_refs (email_id, ref_message_id) VALUES (?, ?)", (email_id, ref)
@@ -350,13 +359,19 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                     ).fetchone()
                     touched_threads.add(row["thread_id"])
                     stats.new += 1
-                    emit(conn, "email_ingested", email_id, {
-                        "subject": parsed.subject,
-                        "from": parsed.from_addr,
-                        "folder": folder,
-                        "date": parsed.date_utc,
-                        "has_attachments": bool(parsed.attachments),
-                    }, account="default")
+                    emit(
+                        conn,
+                        "email_ingested",
+                        email_id,
+                        {
+                            "subject": parsed.subject,
+                            "from": parsed.from_addr,
+                            "folder": folder,
+                            "date": parsed.date_utc,
+                            "has_attachments": bool(parsed.attachments),
+                        },
+                        account="default",
+                    )
 
                 conn.execute(
                     "INSERT OR REPLACE INTO sync_state (folder, uniq, filename, email_id, account) "
@@ -377,24 +392,32 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                 ).fetchone()
                 if row:
                     touched_threads.add(row["thread_id"])
-                    emit(conn, "email_deleted", email_id, {"subject": row["subject"]}, account="default")
+                    emit(
+                        conn,
+                        "email_deleted",
+                        email_id,
+                        {"subject": row["subject"]},
+                        account="default",
+                    )
                 conn.execute("DELETE FROM emails_fts WHERE rowid = ?", (email_id,))
-                try:
+                with suppress(sqlite3.OperationalError):
                     conn.execute("DELETE FROM vec_emails WHERE email_id = ?", (email_id,))
-                except sqlite3.OperationalError:
-                    pass  # vec table not created yet
                 conn.execute("DELETE FROM emails WHERE id = ?", (email_id,))
                 stats.deleted += 1
 
     # Threads may have merged during ingest; recompute stats for survivors only.
-    surviving = {
-        r["id"]
-        for r in conn.execute(
-            "SELECT id FROM threads WHERE id IN (%s)"
-            % ",".join("?" * len(touched_threads)),
-            tuple(touched_threads),
-        )
-    } if touched_threads else set()
+    thread_placeholders = ",".join("?" * len(touched_threads))
+    surviving = (
+        {
+            r["id"]
+            for r in conn.execute(
+                f"SELECT id FROM threads WHERE id IN ({thread_placeholders})",
+                tuple(touched_threads),
+            )
+        }
+        if touched_threads
+        else set()
+    )
     refresh_thread_stats(conn, surviving)
 
     conn.commit()

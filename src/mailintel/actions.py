@@ -18,9 +18,7 @@ def _now() -> str:
 
 
 def complete_action_item(conn: sqlite3.Connection, action_item_id: int, done: bool = True) -> dict:
-    row = conn.execute(
-        "SELECT * FROM action_items WHERE id = ?", (action_item_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM action_items WHERE id = ?", (action_item_id,)).fetchone()
     if not row:
         return {"error": f"action item {action_item_id} not found"}
     status = "done" if done else "open"
@@ -29,19 +27,23 @@ def complete_action_item(conn: sqlite3.Connection, action_item_id: int, done: bo
         (status, _now() if done else None, action_item_id),
     )
     if done:
-        emit(conn, "action_item_completed", row["email_id"], {
-            "action_item_id": action_item_id,
-            "description": row["description"],
-        }, account=row["account"])
+        emit(
+            conn,
+            "action_item_completed",
+            row["email_id"],
+            {
+                "action_item_id": action_item_id,
+                "description": row["description"],
+            },
+            account=row["account"],
+        )
     conn.commit()
     return {"action_item_id": action_item_id, "status": status}
 
 
 def set_importance(conn: sqlite3.Connection, email_id: int, importance: int) -> dict:
     importance = min(5, max(1, importance))
-    cur = conn.execute(
-        "UPDATE emails SET importance = ? WHERE id = ?", (importance, email_id)
-    )
+    cur = conn.execute("UPDATE emails SET importance = ? WHERE id = ?", (importance, email_id))
     if cur.rowcount == 0:
         return {"error": f"email {email_id} not found"}
     row = conn.execute("SELECT account FROM emails WHERE id = ?", (email_id,)).fetchone()
@@ -56,9 +58,7 @@ def tag_email(conn: sqlite3.Connection, email_id: int, tag: str) -> dict:
     row = conn.execute("SELECT account FROM emails WHERE id = ?", (email_id,)).fetchone()
     if not row:
         return {"error": f"email {email_id} not found"}
-    conn.execute(
-        "INSERT OR IGNORE INTO email_tags (email_id, tag) VALUES (?, ?)", (email_id, tag)
-    )
+    conn.execute("INSERT OR IGNORE INTO email_tags (email_id, tag) VALUES (?, ?)", (email_id, tag))
     conn.commit()
     return {"email_id": email_id, "tags": get_tags(conn, email_id), "account": row["account"]}
 
@@ -101,7 +101,7 @@ def add_note(conn: sqlite3.Connection, email_id: int, note: str) -> dict:
     if not row:
         return {"error": f"email {email_id} not found"}
     entry = f"[{_now()}] {note}"
-    combined = f'{row["agent_notes"]}\n{entry}' if row["agent_notes"] else entry
+    combined = f"{row['agent_notes']}\n{entry}" if row["agent_notes"] else entry
     conn.execute("UPDATE emails SET agent_notes = ? WHERE id = ?", (combined, email_id))
     conn.commit()
     return {"email_id": email_id, "agent_notes": combined, "account": row["account"]}

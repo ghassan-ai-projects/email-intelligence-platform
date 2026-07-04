@@ -1,10 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
 [project]
 name = "mailintel"
 version = "0.1.0"
 description = "Local-first email intelligence platform: Maildir -> SQLite knowledge base -> MCP tools for agents"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = { text = "MIT" }
 requires-python = ">=3.12"
+authors = [
+    { name = "ghassan-ai-projects" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
 dependencies = [
     "mcp>=1.2.0",
     "pydantic>=2.7",
@@ -21,22 +38,78 @@ dependencies = [
 [project.scripts]
 mailintel = "mailintel.cli:app"
 
+[project.urls]
+Homepage = "https://github.com/ghassan-ai-projects/email-intelligence-platform"
+Repository = "https://github.com/ghassan-ai-projects/email-intelligence-platform"
+Issues = "https://github.com/ghassan-ai-projects/email-intelligence-platform/issues"
+
 [dependency-groups]
 dev = [
-    "pytest>=8",
-    "ruff>=0.5",
+    "coverage[toml]>=7.8",
+    "mypy>=1.18",
+    "pre-commit>=4.3",
+    "pytest>=8.4",
+    "pytest-cov>=6.2",
+    "ruff>=0.12",
 ]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mailintel"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/mailintel",
+    "tests",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "config.example.toml",
+    "pyproject.toml",
+]
+
 [tool.pytest.ini_options]
+addopts = [
+    "-q",
+    "--import-mode=importlib",
+    "--strict-config",
+    "--strict-markers",
+    "--cov=mailintel",
+    "--cov-report=term-missing",
+    "--cov-fail-under=75",
+]
 testpaths = ["tests"]
+xfail_strict = true
+
+[tool.coverage.run]
+branch = true
+source = ["mailintel"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
+mypy_path = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["anthropic", "html2text", "mcp.*", "openai", "sqlite_vec", "voyageai"]
+ignore_missing_imports = true
 
 [tool.ruff]
-line-length = 100
 target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM", "PIE", "PTH", "RET", "ARG", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG001"]

@@ -11,8 +11,7 @@ from mailintel.config import load_config, load_env_files
 from mailintel.ingest import ingest
 from mailintel.security import UNTRUSTED_NOTICE, recipient_allowed, sanitize_text
 from mailintel.sender import SendError, send_email
-
-from conftest import make_email, write_message
+from tests.conftest import make_email, write_message
 
 
 def test_sanitize_text_strips_hidden_chars():
@@ -99,6 +98,7 @@ def test_send_happy_path_with_forwarded_attachment(conn, cfg, monkeypatch):
 
     class FakeSMTP:
         def __init__(self, host, port, timeout=None):
+            _ = timeout
             sent["host"], sent["port"] = host, port
 
         def __enter__(self):
@@ -123,7 +123,11 @@ def test_send_happy_path_with_forwarded_attachment(conn, cfg, monkeypatch):
     cfg.smtp.host = "mail.gmx.net"
 
     result = send_email(
-        conn, cfg, ["dave@client.example"], "Report", "See attached.",
+        conn,
+        cfg,
+        ["dave@client.example"],
+        "Report",
+        "See attached.",
         attachment_ids=[att_id],
     )
     assert result["status"] == "sent"

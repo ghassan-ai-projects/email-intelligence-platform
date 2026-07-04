@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import sqlite3
 import struct
-from typing import Protocol, Sequence
+from collections.abc import Sequence
+from typing import Protocol, cast
 
 from ..config import EmbeddingsConfig
 from ..db import get_meta, set_meta
@@ -27,9 +28,7 @@ class VoyageEmbedder:
         import voyageai
 
         if not cfg.api_key:
-            raise RuntimeError(
-                f"Missing API key: set the {cfg.api_key_env} environment variable"
-            )
+            raise RuntimeError(f"Missing API key: set the {cfg.api_key_env} environment variable")
         self.cfg = cfg
         self.dimensions = cfg.dimensions
         self.client = voyageai.Client(api_key=cfg.api_key)
@@ -41,7 +40,7 @@ class VoyageEmbedder:
             input_type=input_type,
             output_dimension=self.cfg.dimensions,
         )
-        return resp.embeddings
+        return cast(list[list[float]], resp.embeddings)
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         return self._embed(texts, "document")

@@ -20,7 +20,7 @@ def _email_context(conn: sqlite3.Connection, email_id: int) -> dict:
         "thread_id": r["thread_id"],
         "date": r["date_utc"],
         "subject": r["subject"],
-        "from": f'{r["from_name"]} <{r["from_addr"]}>'.strip(),
+        "from": f"{r['from_name']} <{r['from_addr']}>".strip(),
     }
 
 
@@ -95,7 +95,10 @@ def search_facts(
 
 
 def find_decisions(
-    conn: sqlite3.Connection, query: str | None = None, date_from: str | None = None, limit: int = 50
+    conn: sqlite3.Connection,
+    query: str | None = None,
+    date_from: str | None = None,
+    limit: int = 50,
 ) -> list[dict]:
     return search_facts(conn, query=query, category="decision", date_from=date_from, limit=limit)
 
@@ -158,7 +161,7 @@ def find_waiting_replies(
     out = []
     for r in rows:
         recipients = [
-            f'{rr["name"]} <{rr["addr"]}>'.strip()
+            f"{rr['name']} <{rr['addr']}>".strip()
             for rr in conn.execute(
                 "SELECT addr, name FROM recipients WHERE email_id = ? AND kind = 'to'",
                 (r["id"],),
@@ -179,8 +182,12 @@ def daily_summary(conn: sqlite3.Connection, date: str | None = None) -> dict:
     ).fetchall()
     important = [email_row_brief(r) for r in rows if (r["importance"] or 0) >= 4]
     new_items = [
-        {"description": r["description"], "owner": r["owner"], "due_date": r["due_date"],
-         "source": _email_context(conn, r["email_id"])}
+        {
+            "description": r["description"],
+            "owner": r["owner"],
+            "due_date": r["due_date"],
+            "source": _email_context(conn, r["email_id"]),
+        }
         for r in conn.execute(
             "SELECT a.* FROM action_items a JOIN emails e ON e.id = a.email_id "
             "WHERE e.date_utc BETWEEN ? AND ? AND a.status = 'open'",
