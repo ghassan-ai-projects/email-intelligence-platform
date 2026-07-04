@@ -70,9 +70,7 @@ def init() -> None:
         typer.echo(f"Config already exists: {path}")
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            CONFIG_TEMPLATE.format(db_path=str(DEFAULT_CONFIG_DIR / "mail.db"))
-        )
+        path.write_text(CONFIG_TEMPLATE.format(db_path=str(DEFAULT_CONFIG_DIR / "mail.db")))
         typer.echo(f"Wrote {path}")
     typer.echo(
         "\nNext steps:\n"
@@ -182,7 +180,7 @@ def watch() -> None:
             typer.echo(f"[{time.strftime('%H:%M:%S')}] sync error: {exc}", err=True)
         except KeyboardInterrupt:
             raise
-        except Exception as exc:  # noqa: BLE001 - the watcher must keep running
+        except Exception as exc:
             typer.echo(f"[{time.strftime('%H:%M:%S')}] error: {exc}", err=True)
         time.sleep(max(5.0, interval - (time.monotonic() - started)))
 

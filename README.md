@@ -154,8 +154,10 @@ several defenses are built in ([security.py](src/mailintel/security.py)):
 ## Development
 
 ```sh
-uv sync
-uv run pytest       # fixture Maildir, fake LLM/embedders — no keys needed
+uv sync --group dev
+make ci-check       # format, lint, typecheck, test, build
+make test           # fixture Maildir, fake LLM/embedders — no keys needed
+make hooks          # optional local pre-commit and pre-push hooks
 ```
 
 Layout: `src/mailintel/` — `ingest.py` (Maildir → SQLite), `threading_.py`
@@ -167,7 +169,8 @@ The schema also carries an `account` column on core tables, defaulting to
 `'default'`, to make future multi-account support a config change rather than a
 migration.
 
-See [`AGENTS.md`](AGENTS.md) for build/test commands and conventions.
+See [`AGENTS.md`](AGENTS.md) for build/test commands and conventions, and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for pull request expectations.
 
 Future work: OCR for scanned attachments, promotion of high-value facts into
 shared agent memory (ALMS), webhook-style forwarding of selected events, and

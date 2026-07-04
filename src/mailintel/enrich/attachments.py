@@ -28,13 +28,9 @@ def extract_pdf_text(data: bytes) -> str:
     return "\n".join(chunks).strip()[:MAX_TEXT_CHARS]
 
 
-def find_message_path(
-    conn: sqlite3.Connection, email_id: int, maildir_root: Path
-) -> Path | None:
+def find_message_path(conn: sqlite3.Connection, email_id: int, maildir_root: Path) -> Path | None:
     """Locate the current Maildir file for an email (flag renames move files)."""
-    row = conn.execute(
-        "SELECT maildir_path FROM emails WHERE id = ?", (email_id,)
-    ).fetchone()
+    row = conn.execute("SELECT maildir_path FROM emails WHERE id = ?", (email_id,)).fetchone()
     if not row:
         return None
     path = maildir_root / row["maildir_path"]
@@ -50,7 +46,7 @@ def find_message_path(
 
 
 def _open_message(path: Path):
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         return email_lib.message_from_binary_file(f, policy=email.policy.default)
 
 
@@ -86,9 +82,7 @@ def attachment_text(filename: str, mime: str, data: bytes) -> str | None:
     return None
 
 
-def extract_email_attachments(
-    conn: sqlite3.Connection, email_id: int, maildir_root: Path
-) -> int:
+def extract_email_attachments(conn: sqlite3.Connection, email_id: int, maildir_root: Path) -> int:
     """Extract text from an email's PDF attachments into the attachments table."""
     path = find_message_path(conn, email_id, maildir_root)
     if not path:

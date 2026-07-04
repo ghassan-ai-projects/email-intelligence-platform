@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from ..config import LLMConfig
 
@@ -21,19 +21,19 @@ class LLMError(RuntimeError):
 
 
 class LLMProvider(Protocol):
-    def complete_json(self, system: str, user: str) -> dict: ...
+    def complete_json(self, system: str, user: str) -> dict[str, Any]: ...
 
 
-def parse_json_response(text: str) -> dict:
+def parse_json_response(text: str) -> dict[str, Any]:
     text = _FENCE.sub("", text.strip()).strip()
     # Some models wrap JSON in prose; grab the outermost object as a fallback.
     try:
-        return json.loads(text)
+        return cast(dict[str, Any], json.loads(text))
     except json.JSONDecodeError:
         start, end = text.find("{"), text.rfind("}")
         if start == -1 or end <= start:
-            raise LLMError(f"No JSON object in LLM response: {text[:200]!r}")
-        return json.loads(text[start : end + 1])
+            raise LLMError(f"No JSON object in LLM response: {text[:200]!r}") from None
+        return cast(dict[str, Any], json.loads(text[start : end + 1]))
 
 
 class OpenAICompatProvider:
@@ -41,13 +41,11 @@ class OpenAICompatProvider:
         from openai import OpenAI
 
         if not cfg.api_key:
-            raise LLMError(
-                f"Missing API key: set the {cfg.api_key_env} environment variable"
-            )
+            raise LLMError(f"Missing API key: set the {cfg.api_key_env} environment variable")
         self.cfg = cfg
         self.client = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
 
-    def complete_json(self, system: str, user: str) -> dict:
+    def complete_json(self, system: str, user: str) -> dict[str, Any]:
         resp = self.client.chat.completions.create(
             model=self.cfg.model,
             messages=[
@@ -67,13 +65,11 @@ class AnthropicProvider:
         import anthropic
 
         if not cfg.api_key:
-            raise LLMError(
-                f"Missing API key: set the {cfg.api_key_env} environment variable"
-            )
+            raise LLMError(f"Missing API key: set the {cfg.api_key_env} environment variable")
         self.cfg = cfg
         self.client = anthropic.Anthropic(api_key=cfg.api_key)
 
-    def complete_json(self, system: str, user: str) -> dict:
+    def complete_json(self, system: str, user: str) -> dict[str, Any]:
         resp = self.client.messages.create(
             model=self.cfg.model,
             system=system,
@@ -81,7 +77,11 @@ class AnthropicProvider:
             temperature=self.cfg.temperature,
             max_tokens=self.cfg.max_tokens,
         )
-        text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+        text = "".join(
+            str(getattr(block, "text", ""))
+            for block in resp.content
+            if getattr(block, "type", "") == "text"
+        )
         return parse_json_response(text)
 
 

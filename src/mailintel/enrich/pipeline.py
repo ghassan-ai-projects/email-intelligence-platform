@@ -90,12 +90,18 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
             "VALUES (?, ?, ?, ?, ?)",
             (email_id, description, item.owner, item.due_date, account),
         )
-        emit(conn, "action_item_created", email_id, {
-            "action_item_id": cur.lastrowid,
-            "description": description,
-            "owner": item.owner,
-            "due_date": item.due_date,
-        }, account=account)
+        emit(
+            conn,
+            "action_item_created",
+            email_id,
+            {
+                "action_item_id": cur.lastrowid,
+                "description": description,
+                "owner": item.owner,
+                "due_date": item.due_date,
+            },
+            account=account,
+        )
     for fact in result.facts:
         fact_text = sanitize_text(fact.fact)
         cur = conn.execute(
@@ -103,18 +109,29 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
             "VALUES (?, ?, ?, ?, ?, ?)",
             (email_id, fact_text, fact.category, fact.due_date, fact.confidence, account),
         )
-        emit(conn, "fact_extracted", email_id, {
-            "fact_id": cur.lastrowid,
-            "fact": fact_text,
-            "category": fact.category,
-            "due_date": fact.due_date,
-        }, account=account)
-    emit(conn, "email_enriched", email_id, {
-        "importance": result.importance,
-        "sentiment": result.sentiment,
-        "summary": sanitize_text(result.summary),
-        "language": result.language,
-    })
+        emit(
+            conn,
+            "fact_extracted",
+            email_id,
+            {
+                "fact_id": cur.lastrowid,
+                "fact": fact_text,
+                "category": fact.category,
+                "due_date": fact.due_date,
+            },
+            account=account,
+        )
+    emit(
+        conn,
+        "email_enriched",
+        email_id,
+        {
+            "importance": result.importance,
+            "sentiment": result.sentiment,
+            "summary": sanitize_text(result.summary),
+            "language": result.language,
+        },
+    )
     entity_lists = [
         ("person", result.entities.people),
         ("company", result.entities.companies),
@@ -147,7 +164,7 @@ def run_attachments_stage(conn: sqlite3.Connection, cfg: Config, limit: int) -> 
             extract_email_attachments(conn, job["id"], cfg.maildir.path)
             _mark(conn, job["job_id"], "done")
             done += 1
-        except Exception as exc:  # noqa: BLE001 - queue must survive any single failure
+        except Exception as exc:
             _mark(conn, job["job_id"], "failed", str(exc)[:500])
             failed += 1
         conn.commit()
@@ -170,7 +187,7 @@ def run_enrich_stage(
             store_enrichment(conn, job["id"], result)
             _mark(conn, job["job_id"], "done")
             done += 1
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _mark(conn, job["job_id"], "failed", str(exc)[:500])
             failed += 1
         conn.commit()
@@ -203,11 +220,11 @@ def run_embed_stage(
         texts = [embedding_input(j, cfg.embeddings.max_chars) for j in batch]
         try:
             vectors = embedder.embed_documents(texts)
-            store_embeddings(conn, [(j["id"], v) for j, v in zip(batch, vectors)])
+            store_embeddings(conn, [(j["id"], v) for j, v in zip(batch, vectors, strict=True)])
             for j in batch:
                 _mark(conn, j["job_id"], "done")
             done += len(batch)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             for j in batch:
                 _mark(conn, j["job_id"], "failed", str(exc)[:500])
             failed += len(batch)

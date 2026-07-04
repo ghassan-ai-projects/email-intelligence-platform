@@ -1,8 +1,7 @@
 from pathlib import Path
 
 from mailintel.ingest import ingest
-
-from conftest import write_message
+from tests.conftest import write_message
 
 
 def test_ingest_counts_and_exclusions(conn, cfg):
@@ -29,9 +28,7 @@ def test_attachments_recorded(conn, cfg):
         "SELECT e.id, e.has_attachments FROM emails e WHERE message_id = '<m4@example.com>'"
     ).fetchone()
     assert row["has_attachments"] == 1
-    att = conn.execute(
-        "SELECT * FROM attachments WHERE email_id = ?", (row["id"],)
-    ).fetchone()
+    att = conn.execute("SELECT * FROM attachments WHERE email_id = ?", (row["id"],)).fetchone()
     assert att["filename"] == "doc.pdf"
     assert att["mime"] == "application/pdf"
 
@@ -114,9 +111,7 @@ def test_pipeline_jobs_enqueued(conn, cfg):
     ingest(conn, cfg)
     jobs = {
         (r["stage"],): r["n"]
-        for r in conn.execute(
-            "SELECT stage, COUNT(*) AS n FROM pipeline_jobs GROUP BY stage"
-        )
+        for r in conn.execute("SELECT stage, COUNT(*) AS n FROM pipeline_jobs GROUP BY stage")
     }
     assert jobs[("enrich",)] == 5
     assert jobs[("embed",)] == 5

@@ -51,17 +51,17 @@ def build_enrich_prompt(conn: sqlite3.Connection, email_row: sqlite3.Row, cfg: L
         "SELECT kind, addr, name FROM recipients WHERE email_id = ?", (email_row["id"],)
     ).fetchall()
     to_line = ", ".join(
-        f'{r["name"]} <{r["addr"]}>'.strip() for r in recipients if r["kind"] == "to"
+        f"{r['name']} <{r['addr']}>".strip() for r in recipients if r["kind"] == "to"
     )
 
     body = email_row["body_text"][: cfg.max_body_chars]
 
     parts = [
-        f'From: {email_row["from_name"]} <{email_row["from_addr"]}>'.strip(),
+        f"From: {email_row['from_name']} <{email_row['from_addr']}>".strip(),
         f"To: {to_line}",
-        f'Date: {email_row["date_utc"]} UTC',
-        f'Subject: {email_row["subject"]}',
-        f'Folder: {email_row["folder"]}',
+        f"Date: {email_row['date_utc']} UTC",
+        f"Subject: {email_row['subject']}",
+        f"Folder: {email_row['folder']}",
         "",
         body if body else "(empty body)",
     ]
@@ -71,7 +71,7 @@ def build_enrich_prompt(conn: sqlite3.Connection, email_row: sqlite3.Row, cfg: L
         (email_row["id"],),
     ).fetchall()
     for att in att_rows:
-        parts.append(f'\n--- Attachment: {att["filename"]} ({att["mime"]}) ---')
+        parts.append(f"\n--- Attachment: {att['filename']} ({att['mime']}) ---")
         if att["extracted_text"]:
             parts.append(att["extracted_text"][: cfg.max_attachment_chars])
 

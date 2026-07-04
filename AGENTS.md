@@ -3,16 +3,42 @@
 This is a local-first email intelligence platform. The source lives in
 `src/mailintel/` and is packaged with `uv` + `pyproject.toml`.
 
+Read this file first, then load only the `.agents/context/` files needed for
+the task.
+
 ## Build & test
 
 ```sh
-uv sync                # install dependencies
-uv run pytest -q       # run the test suite (no API keys needed)
-uv run ruff check .    # lint
+uv sync --group dev    # install dependencies
+make ci-check          # format, lint, typecheck, test, build
+make test              # run pytest with coverage
+make lint              # run Ruff lint
+make typecheck         # run mypy over package source
 ```
 
 Tests use synthetic Maildirs, fake LLM providers, and fake embedders — no
 external credentials are required.
+
+## Read order
+
+Before editing:
+
+1. Read this file.
+2. Read [README.md](README.md).
+3. Check the worktree with `git status --short`.
+4. Read the smallest relevant context files under `.agents/context/`.
+5. Make a short plan before broad, security-sensitive, dependency-changing, or
+   architectural work.
+
+Start with these context files:
+
+- [.agents/context/project.md](.agents/context/project.md) for repository scope.
+- [.agents/context/architecture.md](.agents/context/architecture.md) for module boundaries.
+- [.agents/context/testing.md](.agents/context/testing.md) for validation commands.
+- [.agents/context/python-style.md](.agents/context/python-style.md) for coding conventions.
+- [.agents/context/review-checklist.md](.agents/context/review-checklist.md) before handoff.
+
+Use the prompt files under `.agents/prompts/` when the task matches them.
 
 ## Code conventions
 
@@ -22,6 +48,8 @@ external credentials are required.
 - SQLite schema changes go through versioned migrations in `src/mailintel/db.py`.
 - Every MCP tool in `src/mailintel/mcp_server.py` is automatically audit-logged by the
   `_audit_tool` decorator.
+- Keep `README.md`, `config.example.toml`, `Makefile`, CI, and `pyproject.toml`
+  consistent when commands or public behavior change.
 
 ## Module layout
 
@@ -55,4 +83,4 @@ external credentials are required.
    (e.g., sending off by default, low rate caps).
 3. Add tests in `tests/` mirroring the module under test.
 4. Update `README.md` and `config.example.toml`.
-5. Run `uv run pytest -q && uv run ruff check .` before committing.
+5. Run `make ci-check` and `git diff --check` before committing.

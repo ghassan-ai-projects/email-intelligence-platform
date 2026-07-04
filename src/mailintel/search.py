@@ -25,7 +25,7 @@ def email_row_brief(row: sqlite3.Row, extra: dict | None = None) -> dict:
         "thread_id": row["thread_id"],
         "date": row["date_utc"],
         "folder": row["folder"],
-        "from": f'{row["from_name"]} <{row["from_addr"]}>'.strip(),
+        "from": f"{row['from_name']} <{row['from_addr']}>".strip(),
         "subject": row["subject"],
         "snippet": row["snippet"],
         "has_attachments": bool(row["has_attachments"]),
@@ -64,9 +64,7 @@ def search_emails(
         where.append("(e.from_addr LIKE ? OR e.from_name LIKE ?)")
         params.extend([f"%{from_addr}%", f"%{from_addr}%"])
     if to_addr:
-        where.append(
-            "e.id IN (SELECT email_id FROM recipients WHERE addr LIKE ? OR name LIKE ?)"
-        )
+        where.append("e.id IN (SELECT email_id FROM recipients WHERE addr LIKE ? OR name LIKE ?)")
         params.extend([f"%{to_addr}%", f"%{to_addr}%"])
     if folder:
         where.append("e.folder = ?")
@@ -121,8 +119,7 @@ def get_email(conn: sqlite3.Connection, email_id: int) -> dict | None:
     d["action_items"] = [
         dict(r)
         for r in conn.execute(
-            "SELECT id, description, owner, due_date, status FROM action_items "
-            "WHERE email_id = ?",
+            "SELECT id, description, owner, due_date, status FROM action_items WHERE email_id = ?",
             (email_id,),
         )
     ]
@@ -198,8 +195,7 @@ def search_threads(conn: sqlite3.Connection, query: str, limit: int = 10) -> lis
             t["matching_messages"] = r["hits"]
             # Keep thread listings compact: drop per-email bodies/snippets detail.
             t["emails"] = [
-                {k: e[k] for k in ("id", "date", "from", "subject", "is_sent")}
-                for e in t["emails"]
+                {k: e[k] for k in ("id", "date", "from", "subject", "is_sent")} for e in t["emails"]
             ]
             out.append(t)
     return out
@@ -216,7 +212,7 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         )
     ]
     jobs = {
-        f'{r["stage"]}:{r["status"]}': r["n"]
+        f"{r['stage']}:{r['status']}": r["n"]
         for r in conn.execute(
             "SELECT stage, status, COUNT(*) AS n FROM pipeline_jobs GROUP BY stage, status"
         )

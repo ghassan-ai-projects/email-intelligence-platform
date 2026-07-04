@@ -67,9 +67,18 @@ def create_draft(
         ),
     )
     draft_id = cur.lastrowid
-    emit(conn, "draft_created", in_reply_to_email_id, {
-        "draft_id": draft_id, "to": to, "subject": subject,
-    }, account=account)
+    assert draft_id is not None
+    emit(
+        conn,
+        "draft_created",
+        in_reply_to_email_id,
+        {
+            "draft_id": draft_id,
+            "to": to,
+            "subject": subject,
+        },
+        account=account,
+    )
     conn.commit()
     return get_draft(conn, draft_id)
 
@@ -119,17 +128,13 @@ def update_draft(
     if updates:
         updates["updated_at"] = _now()
         sets = ", ".join(f"{k} = ?" for k in updates)
-        conn.execute(
-            f"UPDATE drafts SET {sets} WHERE id = ?", (*updates.values(), draft_id)
-        )
+        conn.execute(f"UPDATE drafts SET {sets} WHERE id = ?", (*updates.values(), draft_id))
         conn.commit()
     return get_draft(conn, draft_id)
 
 
 def delete_draft(conn: sqlite3.Connection, draft_id: int) -> dict:
-    cur = conn.execute(
-        "DELETE FROM drafts WHERE id = ? AND status != 'sent'", (draft_id,)
-    )
+    cur = conn.execute("DELETE FROM drafts WHERE id = ? AND status != 'sent'", (draft_id,))
     conn.commit()
     if cur.rowcount == 0:
         return {"error": f"draft {draft_id} not found (or already sent)"}
@@ -161,9 +166,17 @@ def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
         "UPDATE drafts SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?",
         (now, now, draft_id),
     )
-    emit(conn, "draft_sent", draft["in_reply_to_email_id"], {
-        "draft_id": draft_id, "to": draft["to"], "subject": draft["subject"],
-    }, account=draft["account"])
+    emit(
+        conn,
+        "draft_sent",
+        draft["in_reply_to_email_id"],
+        {
+            "draft_id": draft_id,
+            "to": draft["to"],
+            "subject": draft["subject"],
+        },
+        account=draft["account"],
+    )
     conn.commit()
     result["draft_id"] = draft_id
     return result

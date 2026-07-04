@@ -34,9 +34,9 @@ def test_search_filters(conn, cfg):
 
 def test_get_email_detail(conn, cfg):
     ingest(conn, cfg)
-    eid = conn.execute(
-        "SELECT id FROM emails WHERE message_id = '<m4@example.com>'"
-    ).fetchone()["id"]
+    eid = conn.execute("SELECT id FROM emails WHERE message_id = '<m4@example.com>'").fetchone()[
+        "id"
+    ]
     d = get_email(conn, eid)
     assert d["subject"] == "Quarterly report attached"
     assert "quarterly report" in d["body"].lower()
@@ -54,7 +54,7 @@ def test_get_thread_and_search_threads(conn, cfg):
     assert t["message_count"] == 2
     assert "alice@example.com" in t["participants"]
     assert "bob@example.com" in t["participants"]
-    assert [e["subject"] for e in t["emails"]][0] == "Kubernetes cluster upgrade"
+    assert next(e["subject"] for e in t["emails"]) == "Kubernetes cluster upgrade"
 
     hits = search_threads(conn, "kubernetes")
     assert hits[0]["thread_id"] == tid

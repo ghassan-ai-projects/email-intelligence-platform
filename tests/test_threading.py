@@ -1,7 +1,6 @@
 from mailintel.ingest import ingest
 from mailintel.threading_ import normalize_subject
-
-from conftest import make_email, write_message
+from tests.conftest import make_email, write_message
 
 
 def test_normalize_subject():
@@ -18,9 +17,7 @@ def test_references_threading(conn, cfg):
     ).fetchall()
     tids = {r["thread_id"] for r in rows}
     assert len(tids) == 1
-    t = conn.execute(
-        "SELECT * FROM threads WHERE id = ?", (tids.pop(),)
-    ).fetchone()
+    t = conn.execute("SELECT * FROM threads WHERE id = ?", (tids.pop(),)).fetchone()
     assert t["message_count"] == 2
     assert t["first_date"] == "2025-06-05 10:00:00"
     assert t["last_date"] == "2025-06-05 12:30:00"

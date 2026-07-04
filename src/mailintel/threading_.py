@@ -73,6 +73,7 @@ def assign_thread(
             "VALUES (?, ?, ?, 0, ?)",
             (subject_norm, date_utc, date_utc, account),
         )
+        assert cur.lastrowid is not None
         return cur.lastrowid
 
     keep = min(thread_ids)
@@ -98,7 +99,6 @@ def refresh_thread_stats(conn: sqlite3.Connection, thread_ids: set[int]) -> None
             conn.execute("DELETE FROM threads WHERE id = ?", (tid,))
         else:
             conn.execute(
-                "UPDATE threads SET first_date = ?, last_date = ?, message_count = ? "
-                "WHERE id = ?",
+                "UPDATE threads SET first_date = ?, last_date = ?, message_count = ? WHERE id = ?",
                 (row["first_date"], row["last_date"], row["n"], tid),
             )

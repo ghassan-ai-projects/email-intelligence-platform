@@ -45,6 +45,7 @@ def emit(
             datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
         ),
     )
+    assert cur.lastrowid is not None
     return cur.lastrowid
 
 
