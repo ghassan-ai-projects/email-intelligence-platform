@@ -30,6 +30,7 @@ def assign_thread(
     subject: str,
     date_utc: str,
     refs: list[str],
+    account: str = "default",
 ) -> int:
     """Pick (or create) the thread for a message about to be inserted.
 
@@ -68,9 +69,9 @@ def assign_thread(
 
     if not thread_ids:
         cur = conn.execute(
-            "INSERT INTO threads (subject_norm, first_date, last_date, message_count) "
-            "VALUES (?, ?, ?, 0)",
-            (subject_norm, date_utc, date_utc),
+            "INSERT INTO threads (subject_norm, first_date, last_date, message_count, account) "
+            "VALUES (?, ?, ?, 0, ?)",
+            (subject_norm, date_utc, date_utc, account),
         )
         return cur.lastrowid
 

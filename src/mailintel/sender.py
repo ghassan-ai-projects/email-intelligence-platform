@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import smtplib
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from email.utils import getaddresses
 from pathlib import Path
@@ -24,6 +25,28 @@ from .security import recipient_allowed
 
 class SendError(RuntimeError):
     pass
+
+
+def _now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def check_send_rate(conn: sqlite3.Connection, cfg: Config) -> None:
+    """Block if send_email/send_draft calls in the last hour exceed the cap."""
+    cap = cfg.smtp.max_sends_per_hour
+    if cap <= 0:
+        return
+    since = (datetime.now(UTC) - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+    count = conn.execute(
+        "SELECT COUNT(*) FROM audit_log WHERE tool IN ('send_email', 'send_draft') "
+        "AND created_at > ?",
+        (since,),
+    ).fetchone()[0]
+    if count >= cap:
+        raise SendError(
+            f"Rate limit exceeded: {cap} send(s) per hour. "
+            "Wait or raise smtp.max_sends_per_hour."
+        )
 
 
 def _validated_recipients(raw: list[str], allowed: list[str]) -> list[str]:
@@ -70,6 +93,7 @@ def send_email(
         )
     if not smtp.host:
         raise SendError("smtp.host is not configured")
+    check_send_rate(conn, cfg)
     username, password = smtp.username, smtp.password
     if not username or not password:
         raise SendError(
@@ -132,9 +156,15 @@ def send_email(
         server.login(username, password)
         server.send_message(msg)
 
+    # Use the account of the email being replied to, if any, otherwise default.
+    account = "default"
+    if in_reply_to_email_id is not None:
+        row = conn.execute("SELECT account FROM emails WHERE id = ?", (in_reply_to_email_id,)).fetchone()
+        if row:
+            account = row["account"]
     emit(conn, "email_sent", in_reply_to_email_id, {
         "to": to_addrs, "cc": cc_addrs, "subject": subject, "attachments": attached,
-    })
+    }, account=account)
     conn.commit()
     return {
         "status": "sent",

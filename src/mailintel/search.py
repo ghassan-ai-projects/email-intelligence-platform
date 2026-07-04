@@ -147,6 +147,7 @@ def get_email(conn: sqlite3.Connection, email_id: int) -> dict | None:
         )
     ]
     d["agent_notes"] = row["agent_notes"]
+    d["account"] = row["account"]
     return d
 
 
