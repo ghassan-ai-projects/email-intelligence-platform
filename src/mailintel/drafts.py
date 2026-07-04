@@ -31,6 +31,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "in_reply_to_email_id": row["in_reply_to_email_id"],
         "attachment_ids": json.loads(row["attachment_ids"]),
         "status": row["status"],
+        "account": row["account"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "sent_at": row["sent_at"],
@@ -45,13 +46,14 @@ def create_draft(
     cc: list[str] | None = None,
     in_reply_to_email_id: int | None = None,
     attachment_ids: list[int] | None = None,
+    account: str = "default",
 ) -> dict:
     if not to:
         return {"error": "at least one recipient required"}
     now = _now()
     cur = conn.execute(
         "INSERT INTO drafts (to_addrs, cc_addrs, subject, body, in_reply_to_email_id, "
-        "attachment_ids, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "attachment_ids, account, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             json.dumps(to),
             json.dumps(cc or []),
@@ -59,6 +61,7 @@ def create_draft(
             sanitize_text(body),
             in_reply_to_email_id,
             json.dumps(attachment_ids or []),
+            account,
             now,
             now,
         ),
@@ -66,7 +69,7 @@ def create_draft(
     draft_id = cur.lastrowid
     emit(conn, "draft_created", in_reply_to_email_id, {
         "draft_id": draft_id, "to": to, "subject": subject,
-    })
+    }, account=account)
     conn.commit()
     return get_draft(conn, draft_id)
 
@@ -160,7 +163,7 @@ def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
     )
     emit(conn, "draft_sent", draft["in_reply_to_email_id"], {
         "draft_id": draft_id, "to": draft["to"], "subject": draft["subject"],
-    })
+    }, account=draft["account"])
     conn.commit()
     result["draft_id"] = draft_id
     return result

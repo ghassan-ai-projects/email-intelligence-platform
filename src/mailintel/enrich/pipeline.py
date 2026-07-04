@@ -63,6 +63,9 @@ def _pending_jobs(
 
 
 def store_enrichment(conn: sqlite3.Connection, email_id: int, result: EnrichmentResult) -> None:
+    account_row = conn.execute("SELECT account FROM emails WHERE id = ?", (email_id,)).fetchone()
+    account = account_row["account"] if account_row else "default"
+
     conn.execute(
         "UPDATE emails SET language = ?, summary = ?, importance = ?, sentiment = ?, "
         "enriched_at = ? WHERE id = ?",
@@ -83,29 +86,29 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
     for item in result.action_items:
         description = sanitize_text(item.description)
         cur = conn.execute(
-            "INSERT INTO action_items (email_id, description, owner, due_date) "
-            "VALUES (?, ?, ?, ?)",
-            (email_id, description, item.owner, item.due_date),
+            "INSERT INTO action_items (email_id, description, owner, due_date, account) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (email_id, description, item.owner, item.due_date, account),
         )
         emit(conn, "action_item_created", email_id, {
             "action_item_id": cur.lastrowid,
             "description": description,
             "owner": item.owner,
             "due_date": item.due_date,
-        })
+        }, account=account)
     for fact in result.facts:
         fact_text = sanitize_text(fact.fact)
         cur = conn.execute(
-            "INSERT INTO facts (email_id, fact, category, due_date, confidence) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (email_id, fact_text, fact.category, fact.due_date, fact.confidence),
+            "INSERT INTO facts (email_id, fact, category, due_date, confidence, account) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (email_id, fact_text, fact.category, fact.due_date, fact.confidence, account),
         )
         emit(conn, "fact_extracted", email_id, {
             "fact_id": cur.lastrowid,
             "fact": fact_text,
             "category": fact.category,
             "due_date": fact.due_date,
-        })
+        }, account=account)
     emit(conn, "email_enriched", email_id, {
         "importance": result.importance,
         "sentiment": result.sentiment,

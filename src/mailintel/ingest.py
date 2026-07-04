@@ -238,13 +238,16 @@ def _insert_email(
     is_sent: bool,
     is_read: bool,
     cfg: Config,
+    account: str = "default",
 ) -> int:
-    thread_id = assign_thread(conn, parsed.message_id, parsed.subject, parsed.date_utc, parsed.refs)
+    thread_id = assign_thread(
+        conn, parsed.message_id, parsed.subject, parsed.date_utc, parsed.refs, account
+    )
     snippet = _WS.sub(" ", parsed.body_text)[:SNIPPET_LEN].strip()
     cur = conn.execute(
         "INSERT INTO emails (message_id, thread_id, folder, maildir_path, subject, from_addr, "
-        "from_name, date_utc, body_text, snippet, size, has_attachments, is_sent, is_read) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "from_name, date_utc, body_text, snippet, size, has_attachments, is_sent, is_read, account) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             parsed.message_id,
             thread_id,
@@ -260,6 +263,7 @@ def _insert_email(
             int(bool(parsed.attachments)),
             int(is_sent),
             int(is_read),
+            account,
         ),
     )
     email_id = cur.lastrowid
@@ -269,13 +273,14 @@ def _insert_email(
         )
     for kind, addr, name in parsed.recipients:
         conn.execute(
-            "INSERT INTO recipients (email_id, kind, addr, name) VALUES (?, ?, ?, ?)",
-            (email_id, kind, addr, name),
+            "INSERT INTO recipients (email_id, kind, addr, name, account) VALUES (?, ?, ?, ?, ?)",
+            (email_id, kind, addr, name, account),
         )
     for fn, mime, size in parsed.attachments:
         conn.execute(
-            "INSERT INTO attachments (email_id, filename, mime, size) VALUES (?, ?, ?, ?)",
-            (email_id, fn, mime, size),
+            "INSERT INTO attachments (email_id, filename, mime, size, account) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (email_id, fn, mime, size, account),
         )
     _fts_upsert(conn, email_id, parsed)
     _enqueue_jobs(conn, email_id, parsed, cfg)
@@ -337,7 +342,9 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                     # Same message in another folder (e.g. Gmail label): map, don't duplicate.
                     email_id = existing["id"]
                 else:
-                    email_id = _insert_email(conn, parsed, folder, rel_path, is_sent, is_read, cfg)
+                    email_id = _insert_email(
+                        conn, parsed, folder, rel_path, is_sent, is_read, cfg, account="default"
+                    )
                     row = conn.execute(
                         "SELECT thread_id FROM emails WHERE id = ?", (email_id,)
                     ).fetchone()
@@ -349,12 +356,12 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                         "folder": folder,
                         "date": parsed.date_utc,
                         "has_attachments": bool(parsed.attachments),
-                    })
+                    }, account="default")
 
                 conn.execute(
-                    "INSERT OR REPLACE INTO sync_state (folder, uniq, filename, email_id) "
-                    "VALUES (?, ?, ?, ?)",
-                    (folder, uniq, f.name, email_id),
+                    "INSERT OR REPLACE INTO sync_state (folder, uniq, filename, email_id, account) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (folder, uniq, f.name, email_id, "default"),
                 )
 
     # Removal pass: drop mappings for vanished files, then emails with no remaining copy.
@@ -370,7 +377,7 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                 ).fetchone()
                 if row:
                     touched_threads.add(row["thread_id"])
-                    emit(conn, "email_deleted", email_id, {"subject": row["subject"]})
+                    emit(conn, "email_deleted", email_id, {"subject": row["subject"]}, account="default")
                 conn.execute("DELETE FROM emails_fts WHERE rowid = ?", (email_id,))
                 try:
                     conn.execute("DELETE FROM vec_emails WHERE email_id = ?", (email_id,))

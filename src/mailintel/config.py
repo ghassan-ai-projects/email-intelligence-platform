@@ -118,6 +118,9 @@ class SmtpConfig(BaseModel):
     # Local directories that may be used as attachment sources when sending.
     # Empty = only stored email attachments can be forwarded, no local files.
     attachment_dirs: list[Path] = []
+    # Global cap on outgoing mail. Counts send_email and send_draft calls in the
+    # last hour from the audit log. 0 = unlimited.
+    max_sends_per_hour: int = 10
 
     @field_validator("attachment_dirs", mode="after")
     @classmethod

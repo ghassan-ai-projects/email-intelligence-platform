@@ -33,13 +33,15 @@ def emit(
     event_type: str,
     email_id: int | None = None,
     payload: dict | None = None,
+    account: str = "default",
 ) -> int:
     cur = conn.execute(
-        "INSERT INTO events (type, email_id, payload, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO events (type, email_id, payload, account, created_at) VALUES (?, ?, ?, ?, ?)",
         (
             event_type,
             email_id,
             json.dumps(payload or {}, ensure_ascii=False, default=str),
+            account,
             datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
         ),
     )
@@ -73,6 +75,7 @@ def get_events_since(
             "type": r["type"],
             "email_id": r["email_id"],
             "payload": json.loads(r["payload"]),
+            "account": r["account"],
             "created_at": r["created_at"],
         }
         for r in rows

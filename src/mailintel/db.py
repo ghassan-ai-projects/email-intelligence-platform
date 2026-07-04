@@ -7,7 +7,7 @@ from pathlib import Path
 
 import sqlite_vec
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA = """
 CREATE TABLE emails (
@@ -175,6 +175,34 @@ ALTER TABLE action_items ADD COLUMN completed_at TEXT;
 """
 
 
+# v3: audit log for every MCP tool call, per-hour send rate caps, and account
+# column placeholder for future multi-account support.
+_SCHEMA_V3 = """
+CREATE TABLE audit_log (
+    id             INTEGER PRIMARY KEY,
+    tool           TEXT NOT NULL,
+    args           TEXT NOT NULL DEFAULT '{}',
+    caller         TEXT NOT NULL DEFAULT '',
+    account        TEXT NOT NULL DEFAULT 'default',
+    result_summary TEXT,
+    error          TEXT,
+    created_at     TEXT NOT NULL
+);
+CREATE INDEX idx_audit_log_tool_time    ON audit_log(tool, created_at);
+CREATE INDEX idx_audit_log_account_time ON audit_log(account, created_at);
+
+ALTER TABLE emails      ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE threads     ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE recipients  ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE attachments ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE facts       ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE action_items ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE drafts      ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE events      ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE sync_state  ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
+"""
+
+
 def connect(db_path: Path | str) -> sqlite3.Connection:
     path = Path(db_path)
     if str(path) != ":memory:":
@@ -198,6 +226,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.executescript(_SCHEMA)
     if version < 2:
         conn.executescript(_SCHEMA_V2)
+    if version < 3:
+        conn.executescript(_SCHEMA_V3)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 

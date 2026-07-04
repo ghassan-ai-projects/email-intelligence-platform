@@ -144,6 +144,12 @@ several defenses are built in ([security.py](src/mailintel/security.py)):
   local-file attachments only work from whitelisted `attachment_dirs` (stored
   email attachments can be forwarded by id). This limits the blast radius of a
   successful injection trying to exfiltrate data.
+- **Rate cap on outgoing mail** — `smtp.max_sends_per_hour` counts
+  `send_email`/`send_draft` calls in the audit log and blocks sends over the
+  cap, so a runaway agent cannot spam.
+- **Audit log** — every MCP tool call is recorded (tool, arguments, caller,
+  timestamp, outcome) so you can answer "why did it send that email" after the
+  fact.
 
 ## Development
 
@@ -157,6 +163,12 @@ Layout: `src/mailintel/` — `ingest.py` (Maildir → SQLite), `threading_.py`
 Voyage + sqlite-vec, job pipeline), `knowledge.py` (facts/tasks/digests),
 `events.py` (append-only change feed), `actions.py` (write-back), `drafts.py`
 (draft-first outgoing mail), `mcp_server.py` (tools), `cli.py`.
+The schema also carries an `account` column on core tables, defaulting to
+`'default'`, to make future multi-account support a config change rather than a
+migration.
+
+See [`AGENTS.md`](AGENTS.md) for build/test commands and conventions.
 
 Future work: OCR for scanned attachments, promotion of high-value facts into
-shared agent memory (ALMS), and webhook-style forwarding of selected events.
+shared agent memory (ALMS), webhook-style forwarding of selected events, and
+multi-account sync on top of the existing `account` column.
