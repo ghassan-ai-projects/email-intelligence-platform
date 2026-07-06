@@ -75,6 +75,8 @@ claude mcp add mailintel -- mailintel serve
 ```
 
 `mailintel watch` keeps everything fresh in a loop (`sync.interval_minutes`).
+See [docs/agent-guide.md](docs/agent-guide.md) for the recommended MCP-agent
+operating loop, tool strategy, write-back behavior, and sending safety rules.
 
 ## Reactive agent loop, write-back and drafts
 
@@ -92,6 +94,9 @@ Agents can react to changes instead of polling:
   effects, `update_draft` refines it, and `send_draft` applies the same
   `send_email` guardrails (`smtp.enabled`, `allowed_recipients`) at delivery
   time. Prefer this flow for any mail an agent prepares.
+- Runtime agents should persist the `get_events_since` cursor and use write-back
+  tools so state is not re-discovered every run. Full guidance is in
+  [docs/agent-guide.md](docs/agent-guide.md).
 
 ## Multi-provider enrichment & embeddings
 
@@ -169,8 +174,9 @@ The schema also carries an `account` column on core tables, defaulting to
 `'default'`, to make future multi-account support a config change rather than a
 migration.
 
-See [`AGENTS.md`](AGENTS.md) for build/test commands and conventions, and
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for pull request expectations.
+See [`AGENTS.md`](AGENTS.md) for coding-agent build/test rules,
+[`docs/agent-guide.md`](docs/agent-guide.md) for runtime MCP-agent guidance,
+and [`CONTRIBUTING.md`](CONTRIBUTING.md) for pull request expectations.
 
 Future work: OCR for scanned attachments, promotion of high-value facts into
 shared agent memory (ALMS), webhook-style forwarding of selected events, and

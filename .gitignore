@@ -151,6 +151,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -158,6 +160,15 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# mailintel local runtime state
+.mailintel/
+Mail/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Spyder project settings
 .spyderproject
