@@ -56,6 +56,22 @@ max_attempts = 3
 # Remove "embed" to skip vector search, or "enrich" to skip LLM analysis.
 stages = ["attachments", "enrich", "embed"]
 
+[guardrail]
+# Email security scanning configuration.
+# block_threshold: 0-100; emails scoring >= this are blocked (default 60).
+# scan_on_ingest: run guardrail scanner during ingest (default true).
+# trusted_domains: domains that get -15pt exfiltration-guard penalty.
+block_threshold = 60
+scan_on_ingest = true
+trusted_domains = ["gmx.de", "gmx.net", "github.com", "thunderbird.net"]
+contacts_path = "~/.mailintel/contacts.json"
+
+# Per-detector overrides (optional — all show defaults).
+# [guardrail.prompt_injection]
+# tier1_enabled = true
+# tier2_enabled = true
+# tier3_enabled = true
+
 [smtp]
 # Outgoing mail for the send_email MCP tool. OFF by default; enabling it lets
 # agents send mail, so keep the guardrails below tight.

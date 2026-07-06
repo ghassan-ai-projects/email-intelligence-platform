@@ -36,6 +36,13 @@ def email_row_brief(row: sqlite3.Row, extra: dict | None = None) -> dict:
         d["summary"] = row["summary"]
     if "importance" in keys and row["importance"] is not None:
         d["importance"] = row["importance"]
+    # Guardrail scan info (present after v4 migration).
+    if "guardrail_score" in keys and row["guardrail_score"]:
+        d["guardrail_score"] = row["guardrail_score"]
+        d["guardrail_blocked"] = bool(row["guardrail_blocked"])
+        if "guardrail_warnings" in keys and row["guardrail_warnings"]:
+            import json
+            d["guardrail_warnings"] = json.loads(row["guardrail_warnings"])
     if extra:
         d.update(extra)
     return d

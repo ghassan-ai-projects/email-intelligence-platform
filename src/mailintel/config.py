@@ -146,6 +146,53 @@ class SmtpConfig(BaseModel):
         return os.environ.get(self.password_env)
 
 
+class GuardrailConfig(BaseModel):
+    """Email security guardrail scanner configuration."""
+
+    block_threshold: int = 60
+    scan_on_ingest: bool = True
+    trusted_domains: list[str] = ["gmx.de", "gmx.net", "github.com", "thunderbird.net"]
+    contacts_path: Path | None = Field(
+        default_factory=lambda: DEFAULT_CONFIG_DIR / "contacts.json"
+    )
+    # Per-detector overrides are passed as-is to EmailScanner._load_config.
+    prompt_injection: dict | None = None
+    encoding_anomaly: dict | None = None
+    size_guard: dict | None = None
+    unicode_attack: dict | None = None
+    structural_anomaly: dict | None = None
+    reply_chain: dict | None = None
+    repetition: dict | None = None
+    exfiltration_guard: dict | None = None
+
+    @field_validator("contacts_path", mode="after")
+    @classmethod
+    def _expand_path(cls, v: Path | None) -> Path | None:
+        return _expand(v) if v else None
+
+    def scanner_config(self) -> dict:
+        """Build a flat config dict for the EmailScanner constructor."""
+        cfg: dict = {"block_threshold": self.block_threshold}
+        if self.trusted_domains:
+            cfg["exfiltration_guard"] = {
+                **(self.exfiltration_guard or {}),
+                "trusted_domains": self.trusted_domains,
+            }
+        for key in (
+            "prompt_injection",
+            "encoding_anomaly",
+            "size_guard",
+            "unicode_attack",
+            "structural_anomaly",
+            "reply_chain",
+            "repetition",
+        ):
+            val = getattr(self, key, None)
+            if val is not None:
+                cfg[key] = val
+        return cfg
+
+
 class EnrichConfig(BaseModel):
     max_attempts: int = 3
     stages: list[str] = ["attachments", "enrich", "embed"]
@@ -159,6 +206,7 @@ class Config(BaseModel):
     embeddings: EmbeddingsConfig = Field(default_factory=EmbeddingsConfig)
     enrich: EnrichConfig = Field(default_factory=EnrichConfig)
     smtp: SmtpConfig = Field(default_factory=SmtpConfig)
+    guardrail: GuardrailConfig = Field(default_factory=GuardrailConfig)
 
 
 def config_path() -> Path:

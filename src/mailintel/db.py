@@ -7,7 +7,7 @@ from pathlib import Path
 
 import sqlite_vec
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SCHEMA = """
 CREATE TABLE emails (
@@ -203,6 +203,34 @@ ALTER TABLE sync_state  ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
 """
 
 
+# v4: guardrail columns on emails table + contacts table.
+_SCHEMA_V4 = """
+ALTER TABLE emails ADD COLUMN guardrail_score   INTEGER DEFAULT 0;
+ALTER TABLE emails ADD COLUMN guardrail_blocked  INTEGER DEFAULT 0;
+ALTER TABLE emails ADD COLUMN guardrail_warnings TEXT;
+
+CREATE TABLE contacts (
+    id         INTEGER PRIMARY KEY,
+    addr       TEXT NOT NULL UNIQUE,
+    name       TEXT NOT NULL DEFAULT '',
+    tier       TEXT NOT NULL DEFAULT 'unknown',
+    notes      TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE contact_interactions (
+    id         INTEGER PRIMARY KEY,
+    contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    email_id   INTEGER REFERENCES emails(id) ON DELETE SET NULL,
+    direction  TEXT NOT NULL DEFAULT 'inbound',
+    timestamp  TEXT NOT NULL DEFAULT (datetime('now')),
+    summary    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX idx_contact_ints_contact ON contact_interactions(contact_id);
+"""
+
+
 def connect(db_path: Path | str) -> sqlite3.Connection:
     path = Path(db_path)
     if str(path) != ":memory:":
@@ -215,7 +243,62 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)
     _migrate(conn)
+    # Import known contacts from JSON into the contacts table.
+    _import_contacts_json(conn)
     return conn
+
+
+def _import_contacts_json(conn: sqlite3.Connection) -> None:
+    """Import contacts from ~/.mailintel/contacts.json into the SQLite contacts table."""
+    import json
+    from pathlib import Path
+    from datetime import UTC, datetime
+
+    path = Path.home() / ".mailintel" / "contacts.json"
+    if not path.exists():
+        return
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    for entry in data.get("contacts", []):
+        addr = entry.get("addr", "").lower().strip()
+        if not addr:
+            continue
+        existing = conn.execute(
+            "SELECT id FROM contacts WHERE addr = ?", (addr,)
+        ).fetchone()
+        if existing:
+            # Update tier/name/notes if provided.
+            updates = []
+            params = []
+            for field in ("tier", "name", "notes"):
+                val = entry.get(field)
+                if val:
+                    updates.append(f"{field} = ?")
+                    params.append(val)
+            if updates:
+                updates.append("updated_at = ?")
+                params.append(now)
+                params.append(existing["id"])
+                conn.execute(
+                    f"UPDATE contacts SET {', '.join(updates)} WHERE id = ?", params
+                )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO contacts (addr, name, tier, notes, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    addr,
+                    entry.get("name", ""),
+                    entry.get("tier", "unknown"),
+                    entry.get("notes", ""),
+                    now,
+                    now,
+                ),
+            )
+    conn.commit()
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -228,6 +311,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.executescript(_SCHEMA_V2)
     if version < 3:
         conn.executescript(_SCHEMA_V3)
+    if version < 4:
+        conn.executescript(_SCHEMA_V4)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 

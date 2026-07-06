@@ -15,6 +15,8 @@ from mcp.server.fastmcp import FastMCP
 from . import db, knowledge, search
 from .config import Config, load_config
 from .enrich.embeddings import embedding_input, knn_email_ids, make_embedder
+from .guardrail import ContactsDB, migrate_guardrail, scan_email
+from .guardrail.db import store_guardrail_result
 from .security import UNTRUSTED_NOTICE
 
 mcp = FastMCP(
@@ -255,13 +257,31 @@ def related_emails(email_id: int, limit: int = 10) -> list[dict]:
 @mcp.tool()
 @_audit_tool
 def get_email(email_id: int) -> dict:
-    """Full detail for one email: body, recipients, attachments, extracted knowledge."""
+    """Full detail for one email: body, recipients, attachments, extracted knowledge.
+
+    Guardrail scan info (guardrail_score, guardrail_blocked, guardrail_warnings)
+    is included when the email was scanned on ingest.
+    """
     conn = get_conn()
     try:
         result = search.get_email(conn, email_id)
         if not result:
             return {"error": f"email {email_id} not found"}
         result["notice"] = UNTRUSTED_NOTICE
+
+        # Append guardrail info from the emails row (already included by email_row_brief,
+        # but get_email calls it then adds more fields — ensure they're carried through).
+        row = conn.execute(
+            "SELECT guardrail_score, guardrail_blocked, guardrail_warnings FROM emails WHERE id = ?",
+            (email_id,),
+        ).fetchone()
+        if row and row["guardrail_score"]:
+            import json
+
+            result["guardrail_score"] = row["guardrail_score"]
+            result["guardrail_blocked"] = bool(row["guardrail_blocked"])
+            result["guardrail_warnings"] = json.loads(row["guardrail_warnings"] or "[]")
+
         return result
     finally:
         conn.close()
@@ -277,6 +297,23 @@ def get_thread(thread_id: int) -> dict:
         if not result:
             return {"error": f"thread {thread_id} not found"}
         result["notice"] = UNTRUSTED_NOTICE
+        # Attach guardrail info to each email in the thread.
+        if "emails" in result:
+            import json
+            for email_item in result["emails"]:
+                eid = email_item.get("email_id") or email_item.get("id")
+                if eid:
+                    row = conn.execute(
+                        "SELECT guardrail_score, guardrail_blocked, guardrail_warnings "
+                        "FROM emails WHERE id = ?",
+                        (eid,),
+                    ).fetchone()
+                    if row and row["guardrail_score"]:
+                        email_item["guardrail_score"] = row["guardrail_score"]
+                        email_item["guardrail_blocked"] = bool(row["guardrail_blocked"])
+                        email_item["guardrail_warnings"] = json.loads(
+                            row["guardrail_warnings"] or "[]"
+                        )
         return result
     finally:
         conn.close()
@@ -679,6 +716,53 @@ def delete_draft(draft_id: int) -> dict:
     conn = get_conn()
     try:
         return drafts.delete_draft(conn, draft_id)
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+@_audit_tool
+def scan_email_mcp(
+    sender: str,
+    subject: str,
+    body: str,
+) -> dict:
+    """Run the guardrail scanner on arbitrary email text (on-demand)."""
+    from .guardrail.scanner_wrapper import scan_email
+
+    result = scan_email(sender=sender, subject=subject, body=body)
+    return {
+        "blocked": result.blocked,
+        "risk_score": result.risk_score,
+        "warnings": result.warnings,
+        "truncated": result.truncated,
+        "scan_duration_ms": round(result.scan_duration_ms, 2),
+    }
+
+
+@mcp.tool()
+@_audit_tool
+def list_contacts(tier: str | None = None) -> list[dict]:
+    """List known contacts, optionally filtered by tier (trusted/known/unknown)."""
+    conn = get_conn()
+    try:
+        dbc = ContactsDB(conn)
+        return dbc.list_contacts(tier)
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+@_audit_tool
+def update_contact_tier(addr: str, tier: str) -> dict:
+    """Change the tier of a contact. tier: trusted | known | unknown."""
+    conn = get_conn()
+    try:
+        dbc = ContactsDB(conn)
+        info = dbc.update_tier(addr, tier)
+        return {"status": "ok", "contact": {"addr": info.sender, "tier": info.tier, "name": info.name}}
+    except ValueError as exc:
+        return {"error": str(exc)}
     finally:
         conn.close()
 
