@@ -15,8 +15,7 @@ from mcp.server.fastmcp import FastMCP
 from . import db, knowledge, search
 from .config import Config, load_config
 from .enrich.embeddings import embedding_input, knn_email_ids, make_embedder
-from .guardrail import ContactsDB, migrate_guardrail, scan_email
-from .guardrail.db import store_guardrail_result
+from .guardrail import ContactsDB
 from .security import UNTRUSTED_NOTICE
 
 mcp = FastMCP(
@@ -272,7 +271,8 @@ def get_email(email_id: int) -> dict:
         # Append guardrail info from the emails row (already included by email_row_brief,
         # but get_email calls it then adds more fields — ensure they're carried through).
         row = conn.execute(
-            "SELECT guardrail_score, guardrail_blocked, guardrail_warnings FROM emails WHERE id = ?",
+            "SELECT guardrail_score, guardrail_blocked, guardrail_warnings "
+            "FROM emails WHERE id = ?",
             (email_id,),
         ).fetchone()
         if row and row["guardrail_score"]:
@@ -300,6 +300,7 @@ def get_thread(thread_id: int) -> dict:
         # Attach guardrail info to each email in the thread.
         if "emails" in result:
             import json
+
             for email_item in result["emails"]:
                 eid = email_item.get("email_id") or email_item.get("id")
                 if eid:
@@ -760,7 +761,10 @@ def update_contact_tier(addr: str, tier: str) -> dict:
     try:
         dbc = ContactsDB(conn)
         info = dbc.update_tier(addr, tier)
-        return {"status": "ok", "contact": {"addr": info.sender, "tier": info.tier, "name": info.name}}
+        return {
+            "status": "ok",
+            "contact": {"addr": info.sender, "tier": info.tier, "name": info.name},
+        }
     except ValueError as exc:
         return {"error": str(exc)}
     finally:

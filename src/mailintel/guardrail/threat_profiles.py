@@ -6,11 +6,11 @@ This is the single source of truth; the detector code never hardcodes patterns.
 """
 
 import re
-from typing import Dict, List, Pattern
+from re import Pattern
 
 # ─── Prompt Injection Patterns ───────────────────────────────────────────────
 
-PROMPT_INJECTION: Dict[str, List[str]] = {
+PROMPT_INJECTION: dict[str, list[str]] = {
     "tier1": [
         # Direct instruction override
         r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|directives|prompts|commands)",
@@ -61,7 +61,7 @@ PROMPT_INJECTION: Dict[str, List[str]] = {
 # ─── Encoded Payload Signatures ──────────────────────────────────────────────
 
 # Patterns to check in decoded payloads
-SUSPICIOUS_DECODED_PATTERNS: List[str] = [
+SUSPICIOUS_DECODED_PATTERNS: list[str] = [
     r"ignore\s+(previous|prior|all)",
     r"system\s+prompt",
     r"you\s+are\s+now",
@@ -75,7 +75,7 @@ SUSPICIOUS_DECODED_PATTERNS: List[str] = [
 ]
 
 # Markers that suggest encoded content is worth investigating
-ENCODING_INDICATORS: List[str] = [
+ENCODING_INDICATORS: list[str] = [
     "base64",
     "decode",
     "decrypt",
@@ -89,86 +89,87 @@ ENCODING_INDICATORS: List[str] = [
 # ─── Homoglyph Map ───────────────────────────────────────────────────────────
 # Maps Unicode confusables → their ASCII lookalike
 
-HOMOGLYPH_MAP: Dict[str, str] = {
+HOMOGLYPH_MAP: dict[str, str] = {
     # Cyrillic → Latin
-    '\u0430': 'a',  # а → a
-    '\u0435': 'e',  # е → e
-    '\u043E': 'o',  # о → o
-    '\u0440': 'p',  # р → p
-    '\u0441': 'c',  # с → c
-    '\u0445': 'x',  # х → x
-    '\u0443': 'y',  # у → y
-    '\u0410': 'A',  # А → A
-    '\u0412': 'B',  # В → B
-    '\u0415': 'E',  # Е → E
-    '\u041A': 'K',  # К → K
-    '\u041C': 'M',  # М → M
-    '\u041D': 'H',  # Н → H
-    '\u041E': 'O',  # О → O
-    '\u0420': 'P',  # Р → P
-    '\u0421': 'C',  # С → C
-    '\u0422': 'T',  # Т → T
-    '\u0423': 'Y',  # У → Y
-    '\u0425': 'X',  # Х → X
+    "\u0430": "a",  # а → a
+    "\u0435": "e",  # е → e
+    "\u043e": "o",  # о → o
+    "\u0440": "p",  # р → p
+    "\u0441": "c",  # с → c
+    "\u0445": "x",  # х → x
+    "\u0443": "y",  # у → y
+    "\u0410": "A",  # А → A
+    "\u0412": "B",  # В → B
+    "\u0415": "E",  # Е → E
+    "\u041a": "K",  # К → K
+    "\u041c": "M",  # М → M
+    "\u041d": "H",  # Н → H
+    "\u041e": "O",  # О → O
+    "\u0420": "P",  # Р → P
+    "\u0421": "C",  # С → C
+    "\u0422": "T",  # Т → T
+    "\u0423": "Y",  # У → Y
+    "\u0425": "X",  # Х → X
     # Greek → Latin
-    '\u0391': 'A',  # Α → A
-    '\u0392': 'B',  # Β → B
-    '\u0395': 'E',  # Ε → E
-    '\u0399': 'I',  # Ι → I
-    '\u039A': 'K',  # Κ → K
-    '\u039C': 'M',  # Μ → M
-    '\u039D': 'N',  # Ν → N
-    '\u039F': 'O',  # Ο → O
-    '\u03A1': 'P',  # Ρ → P
-    '\u03A4': 'T',  # Τ → T
-    '\u03A5': 'Y',  # Υ → Y
-    '\u03A7': 'X',  # Χ → X
+    "\u0391": "A",  # Α → A
+    "\u0392": "B",  # Β → B
+    "\u0395": "E",  # Ε → E
+    "\u0399": "I",  # Ι → I
+    "\u039a": "K",  # Κ → K
+    "\u039c": "M",  # Μ → M
+    "\u039d": "N",  # Ν → N
+    "\u039f": "O",  # Ο → O
+    "\u03a1": "P",  # Ρ → P
+    "\u03a4": "T",  # Τ → T
+    "\u03a5": "Y",  # Υ → Y
+    "\u03a7": "X",  # Χ → X
 }
 
 # ─── Zero-Width & Invisible Characters ──────────────────────────────────────
 
-ZERO_WIDTH_CHARS: Dict[str, str] = {
-    '\u200B': 'ZWSP',     # Zero-Width Space
-    '\u200C': 'ZWNJ',     # Zero-Width Non-Joiner
-    '\u200D': 'ZWJ',      # Zero-Width Joiner
-    '\uFEFF': 'ZWNBSP',   # Zero-Width No-Break Space (BOM)
-    '\u2060': 'WJ',       # Word Joiner
-    '\u2061': 'FUNC',     # Function Application
-    '\u2062': 'TIMES',    # Invisible Times
-    '\u2063': 'SEP',      # Invisible Separator
-    '\u2064': 'INVS',     # Invisible Plus
+ZERO_WIDTH_CHARS: dict[str, str] = {
+    "\u200b": "ZWSP",  # Zero-Width Space
+    "\u200c": "ZWNJ",  # Zero-Width Non-Joiner
+    "\u200d": "ZWJ",  # Zero-Width Joiner
+    "\ufeff": "ZWNBSP",  # Zero-Width No-Break Space (BOM)
+    "\u2060": "WJ",  # Word Joiner
+    "\u2061": "FUNC",  # Function Application
+    "\u2062": "TIMES",  # Invisible Times
+    "\u2063": "SEP",  # Invisible Separator
+    "\u2064": "INVS",  # Invisible Plus
 }
 
-BIDI_OVERRIDE_CHARS: Dict[str, str] = {
-    '\u202A': 'LRE',      # Left-to-Right Embedding
-    '\u202B': 'RLE',      # Right-to-Left Embedding
-    '\u202C': 'PDF',      # Pop Directional Formatting
-    '\u202D': 'LRO',      # Left-to-Right Override
-    '\u202E': 'RLO',      # Right-to-Left Override
-    '\u2066': 'LRI',      # Left-to-Right Isolate
-    '\u2067': 'RLI',      # Right-to-Left Isolate
-    '\u2068': 'FSI',      # First Strong Isolate
-    '\u2069': 'PDI',      # Pop Directional Isolate
+BIDI_OVERRIDE_CHARS: dict[str, str] = {
+    "\u202a": "LRE",  # Left-to-Right Embedding
+    "\u202b": "RLE",  # Right-to-Left Embedding
+    "\u202c": "PDF",  # Pop Directional Formatting
+    "\u202d": "LRO",  # Left-to-Right Override
+    "\u202e": "RLO",  # Right-to-Left Override
+    "\u2066": "LRI",  # Left-to-Right Isolate
+    "\u2067": "RLI",  # Right-to-Left Isolate
+    "\u2068": "FSI",  # First Strong Isolate
+    "\u2069": "PDI",  # Pop Directional Isolate
 }
 
 # ─── Compilation Helper ──────────────────────────────────────────────────────
 
-def compile_patterns(patterns_dict: Dict[str, List[str]]) -> Dict[str, List[Pattern]]:
+
+def compile_patterns(patterns_dict: dict[str, list[str]]) -> dict[str, list[Pattern]]:
     """Compile string patterns into compiled regex objects, grouped by key."""
-    compiled: Dict[str, List[Pattern]] = {}
+    compiled: dict[str, list[Pattern]] = {}
     for key, patterns in patterns_dict.items():
         compiled[key] = [re.compile(p, re.IGNORECASE) for p in patterns]
     return compiled
 
 
-def compile_suspicious_decoded() -> List[Pattern]:
+def compile_suspicious_decoded() -> list[Pattern]:
     """Compile patterns for checking decoded payload content."""
     return [re.compile(p, re.IGNORECASE) for p in SUSPICIOUS_DECODED_PATTERNS]
 
 
 # ─── Known Malicious Header Signatures ──────────────────────────────────────
 
-SUSPICIOUS_CONTENT_TYPES: List[str] = [
+SUSPICIOUS_CONTENT_TYPES: list[str] = [
     "text/javascript",
     "application/x-javascript",
     "application/x-msdownload",
@@ -181,16 +182,35 @@ SUSPICIOUS_CONTENT_TYPES: List[str] = [
     "text/html",
 ]
 
-SUSPICIOUS_ATTACHMENT_EXTENSIONS: List[str] = [
-    ".exe", ".bat", ".cmd", ".vbs", ".vbe", ".js", ".jse",
-    ".wsf", ".wsh", ".ps1", ".psm1", ".psd1", ".scr", ".pif",
-    ".hta", ".cpl", ".msi", ".msp", ".mst", ".reg", ".docm",
-    ".xlsm", ".pptm",
+SUSPICIOUS_ATTACHMENT_EXTENSIONS: list[str] = [
+    ".exe",
+    ".bat",
+    ".cmd",
+    ".vbs",
+    ".vbe",
+    ".js",
+    ".jse",
+    ".wsf",
+    ".wsh",
+    ".ps1",
+    ".psm1",
+    ".psd1",
+    ".scr",
+    ".pif",
+    ".hta",
+    ".cpl",
+    ".msi",
+    ".msp",
+    ".mst",
+    ".reg",
+    ".docm",
+    ".xlsm",
+    ".pptm",
 ]
 
 # ─── Quote Prefixes for Reply-Chain Detection ───────────────────────────────
 
-QUOTE_PREFIXES: List[str] = [
+QUOTE_PREFIXES: list[str] = [
     r">\s?",
     r"On\s+.*\s+wrote\s*:",
     r"---+\s*Original\s+Message\s*---+\s*",

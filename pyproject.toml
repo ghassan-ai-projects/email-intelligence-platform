@@ -116,3 +116,5 @@ select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM", "PIE", "PTH", "RET", "ARG"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ARG001"]
+"src/mailintel/guardrail/scanner.py" = ["ARG002", "RUF012"]
+"src/mailintel/guardrail/threat_profiles.py" = ["RUF003"]

@@ -251,8 +251,8 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
 def _import_contacts_json(conn: sqlite3.Connection) -> None:
     """Import contacts from ~/.mailintel/contacts.json into the SQLite contacts table."""
     import json
-    from pathlib import Path
     from datetime import UTC, datetime
+    from pathlib import Path
 
     path = Path.home() / ".mailintel" / "contacts.json"
     if not path.exists():
@@ -266,9 +266,7 @@ def _import_contacts_json(conn: sqlite3.Connection) -> None:
         addr = entry.get("addr", "").lower().strip()
         if not addr:
             continue
-        existing = conn.execute(
-            "SELECT id FROM contacts WHERE addr = ?", (addr,)
-        ).fetchone()
+        existing = conn.execute("SELECT id FROM contacts WHERE addr = ?", (addr,)).fetchone()
         if existing:
             # Update tier/name/notes if provided.
             updates = []
@@ -282,9 +280,7 @@ def _import_contacts_json(conn: sqlite3.Connection) -> None:
                 updates.append("updated_at = ?")
                 params.append(now)
                 params.append(existing["id"])
-                conn.execute(
-                    f"UPDATE contacts SET {', '.join(updates)} WHERE id = ?", params
-                )
+                conn.execute(f"UPDATE contacts SET {', '.join(updates)} WHERE id = ?", params)
         else:
             conn.execute(
                 "INSERT OR IGNORE INTO contacts (addr, name, tier, notes, created_at, updated_at) "

@@ -12,10 +12,7 @@ def migrate_guardrail(conn: sqlite3.Connection) -> None:
     This is a no-op if the v4 schema migration in db.py has already run.
     It can be called independently as a safety net.
     """
-    existing = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(emails)").fetchall()
-    }
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(emails)").fetchall()}
     cols = {
         "guardrail_score": "INTEGER DEFAULT 0",
         "guardrail_blocked": "INTEGER DEFAULT 0",
@@ -28,9 +25,7 @@ def migrate_guardrail(conn: sqlite3.Connection) -> None:
     # Contacts table (idempotent).
     existing_tables = {
         row["name"]
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     if "contacts" not in existing_tables:
         conn.executescript("""

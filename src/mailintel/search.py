@@ -42,6 +42,7 @@ def email_row_brief(row: sqlite3.Row, extra: dict | None = None) -> dict:
         d["guardrail_blocked"] = bool(row["guardrail_blocked"])
         if "guardrail_warnings" in keys and row["guardrail_warnings"]:
             import json
+
             d["guardrail_warnings"] = json.loads(row["guardrail_warnings"])
     if extra:
         d.update(extra)

@@ -14,7 +14,7 @@ from typing import Any
 from .scanner import EmailScanner, ScanResult
 
 # Re-export the scanner class so consumers can instantiate their own if needed.
-EmailScanner = EmailScanner  # noqa: F811 — alias for import convenience
+EmailScanner = EmailScanner
 
 
 @dataclass

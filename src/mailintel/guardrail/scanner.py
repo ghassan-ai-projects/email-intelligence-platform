@@ -29,36 +29,36 @@ import json
 import os
 import re
 import time
-import unicodedata
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Pattern, Set, Tuple
+from pathlib import Path
+from re import Pattern
 from urllib.parse import unquote
 
 from .threat_profiles import (
-    HOMOGLYPH_MAP,
-    ZERO_WIDTH_CHARS,
     BIDI_OVERRIDE_CHARS,
-    QUOTE_PREFIXES,
-    SUSPICIOUS_CONTENT_TYPES,
-    SUSPICIOUS_ATTACHMENT_EXTENSIONS,
+    HOMOGLYPH_MAP,
     PROMPT_INJECTION,
-    SUSPICIOUS_DECODED_PATTERNS,
+    QUOTE_PREFIXES,
+    SUSPICIOUS_ATTACHMENT_EXTENSIONS,
+    SUSPICIOUS_CONTENT_TYPES,
+    ZERO_WIDTH_CHARS,
     compile_patterns,
     compile_suspicious_decoded,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Classes
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class ScanResult:
     """Result of scanning an email through the guardrail pipeline."""
+
     blocked: bool = False
-    risk_score: int = 0  # 0–100
-    warnings: List[str] = field(default_factory=list)
+    risk_score: int = 0  # 0-100
+    warnings: list[str] = field(default_factory=list)
     truncated: bool = False
     original_length: int = 0
     scan_duration_ms: float = 0.0
@@ -67,21 +67,22 @@ class ScanResult:
 @dataclass
 class DetectorResult:
     """Result from an individual detector."""
-    risk_score: int = 0  # 0–100
+
+    risk_score: int = 0  # 0-100
     triggered: bool = False
-    details: List[str] = field(default_factory=list)
+    details: list[str] = field(default_factory=list)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Base Detector Interface
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class BaseDetector(ABC):
     """Abstract base class for all detectors."""
 
     @abstractmethod
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         """Run detection logic and return a scored result."""
         ...
 
@@ -96,6 +97,7 @@ class BaseDetector(ABC):
 # Detector 1: Prompt Injection Detector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class PromptInjectionDetector(BaseDetector):
     """
     Detects known prompt injection phrases, role-play hijacks, and DAN variants.
@@ -109,10 +111,10 @@ class PromptInjectionDetector(BaseDetector):
     TIER_SCORES = {"tier1": 40, "tier2": 20, "tier3": 10}
     MAX_SCORE = 100
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
-        self._patterns: Dict[str, List[Pattern]] = compile_patterns(PROMPT_INJECTION)
-        self._enabled_tiers: Set[str] = set()
+        self._patterns: dict[str, list[Pattern]] = compile_patterns(PROMPT_INJECTION)
+        self._enabled_tiers: set[str] = set()
         for tier in ("tier1", "tier2", "tier3"):
             if config.get(f"{tier}_enabled", True):
                 self._enabled_tiers.add(tier)
@@ -121,11 +123,10 @@ class PromptInjectionDetector(BaseDetector):
     def name(self) -> str:
         return "prompt_injection"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         text = f"{subject}\n{body}".lower()
         score = 0
-        details: List[str] = []
+        details: list[str] = []
 
         for tier, patterns in self._patterns.items():
             if tier not in self._enabled_tiers:
@@ -135,8 +136,7 @@ class PromptInjectionDetector(BaseDetector):
                     pts = self.TIER_SCORES[tier]
                     score += pts
                     details.append(
-                        f"Prompt injection [{tier}] (+{pts}): "
-                        f"matched /{pattern.pattern}/"
+                        f"Prompt injection [{tier}] (+{pts}): matched /{pattern.pattern}/"
                     )
 
         score = min(score, self.MAX_SCORE)
@@ -151,6 +151,7 @@ class PromptInjectionDetector(BaseDetector):
 # Detector 2: Encoding Anomaly Detector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class EncodingAnomalyDetector(BaseDetector):
     """
     Detects hidden instructions in encoded payloads.
@@ -163,13 +164,13 @@ class EncodingAnomalyDetector(BaseDetector):
     """
 
     # Match long base64 strings (≥40 chars of [A-Za-z0-9+/=])
-    BASE64_RE = re.compile(rb'[A-Za-z0-9+/=]{40,}')
+    BASE64_RE = re.compile(rb"[A-Za-z0-9+/=]{40,}")
     # Match hex escape sequences like \\x68\\x65\\x6c or 0x680x65
-    HEX_RE = re.compile(r'(?:\\x[0-9a-fA-F]{2}){4,}|(?:0x[0-9a-fA-F]{2}){4,}')
+    HEX_RE = re.compile(r"(?:\\x[0-9a-fA-F]{2}){4,}|(?:0x[0-9a-fA-F]{2}){4,}")
     # Match URL-encoded sequences (allow non-consecutive — %20foo%20 is still encoded)
-    URLENC_RE = re.compile(r'%[0-9a-fA-F]{2}')
+    URLENC_RE = re.compile(r"%[0-9a-fA-F]{2}")
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
         self._min_base64 = config.get("min_base64_length", 40)
         self._decode_nested = config.get("decode_nested", True)
@@ -179,10 +180,9 @@ class EncodingAnomalyDetector(BaseDetector):
     def name(self) -> str:
         return "encoding_anomaly"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         score = 0
-        details: List[str] = []
+        details: list[str] = []
 
         score += self._scan_base64(body, details)
         score += self._scan_hex(body, details)
@@ -195,7 +195,7 @@ class EncodingAnomalyDetector(BaseDetector):
             details=details,
         )
 
-    def _scan_base64(self, body: str, details: List[str]) -> int:
+    def _scan_base64(self, body: str, details: list[str]) -> int:
         raw = body.encode("utf-8")
         score = 0
         seen = set()
@@ -207,8 +207,7 @@ class EncodingAnomalyDetector(BaseDetector):
             if len(chunk) < self._min_base64:
                 continue
             # Check that this actually looks like base64 with proper charset mix
-            uc = sum(1 for b in chunk if 65 <= b <= 90)   # A-Z
-            lc = sum(1 for b in chunk if 97 <= b <= 122)  # a-z
+            uc = sum(1 for b in chunk if 65 <= b <= 90)  # A-Z
             digits = sum(1 for b in chunk if 48 <= b <= 57)  # 0-9
             if uc == 0 and digits == 0:
                 continue  # all lowercase = probably normal text
@@ -216,7 +215,7 @@ class EncodingAnomalyDetector(BaseDetector):
             # Try decoding
             try:
                 # Pad if needed
-                padded = chunk + b'=' * (-len(chunk) % 4)
+                padded = chunk + b"=" * (-len(chunk) % 4)
                 decoded_bytes = base64.b64decode(padded, validate=True)
                 decoded_text = decoded_bytes.decode("utf-8", errors="replace")
             except Exception:
@@ -241,7 +240,7 @@ class EncodingAnomalyDetector(BaseDetector):
 
         return min(score, 60)
 
-    def _scan_hex(self, body: str, details: List[str]) -> int:
+    def _scan_hex(self, body: str, details: list[str]) -> int:
         matches = self.HEX_RE.findall(body)
         if not matches:
             return 0
@@ -253,7 +252,7 @@ class EncodingAnomalyDetector(BaseDetector):
 
         return 5  # Hex pattern found but not obviously suspicious
 
-    def _scan_urlencoded(self, body: str, details: List[str]) -> int:
+    def _scan_urlencoded(self, body: str, details: list[str]) -> int:
         matches = self.URLENC_RE.findall(body)
         if len(matches) < 4:  # Need at least 4 encoded sequences
             return 0
@@ -265,14 +264,14 @@ class EncodingAnomalyDetector(BaseDetector):
 
         return 5
 
-    def _scan_nested(self, text: str, details: List[str]) -> int:
+    def _scan_nested(self, text: str, details: list[str]) -> int:
         """Recursively check if decoded text contains further encoding."""
         score = 0
         # Check for nested base64
         raw = text.encode("utf-8")
         for match in self.BASE64_RE.finditer(raw):
             try:
-                padded = match.group() + b'=' * (-len(match.group()) % 4)
+                padded = match.group() + b"=" * (-len(match.group()) % 4)
                 double_decoded = base64.b64decode(padded, validate=True)
                 double_text = double_decoded.decode("utf-8", errors="replace")
                 if self._contains_suspicious(double_text):
@@ -287,25 +286,23 @@ class EncodingAnomalyDetector(BaseDetector):
         """Decode \\xNN and 0xNN hex sequences from text."""
         result = []
         # Match \\xNN
-        for m in re.finditer(r'\\x([0-9a-fA-F]{2})', body):
+        for m in re.finditer(r"\\x([0-9a-fA-F]{2})", body):
             result.append(chr(int(m.group(1), 16)))
         # Match 0xNN
-        for m in re.finditer(r'0x([0-9a-fA-F]{2})', body):
+        for m in re.finditer(r"0x([0-9a-fA-F]{2})", body):
             result.append(chr(int(m.group(1), 16)))
-        return ''.join(result)
+        return "".join(result)
 
     def _contains_suspicious(self, text: str) -> bool:
         """Check decoded text against known suspicious patterns."""
         lower = text.lower()
-        for pat in self._suspicious_patterns:
-            if pat.search(lower):
-                return True
-        return False
+        return any(pat.search(lower) for pat in self._suspicious_patterns)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Detector 3: Size Guard Detector
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class SizeGuardDetector(BaseDetector):
     """
@@ -320,20 +317,18 @@ class SizeGuardDetector(BaseDetector):
     DEFAULT_MAX_CHARS = 1_000_000
     DEFAULT_TRUNCATION_LENGTH = 100_000
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
         self.max_bytes = config.get("max_bytes", self.DEFAULT_MAX_BYTES)
         self.max_chars = config.get("max_chars", self.DEFAULT_MAX_CHARS)
-        self.truncation_length = config.get("truncation_length",
-                                             self.DEFAULT_TRUNCATION_LENGTH)
+        self.truncation_length = config.get("truncation_length", self.DEFAULT_TRUNCATION_LENGTH)
         self.truncated = False
 
     @property
     def name(self) -> str:
         return "size_guard"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         byte_len = len(body.encode("utf-8"))
         char_len = len(body)
 
@@ -371,6 +366,7 @@ class SizeGuardDetector(BaseDetector):
 # Detector 4: Unicode Attack Detector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class UnicodeAttackDetector(BaseDetector):
     """
     Detects unicode-based attacks:
@@ -381,21 +377,21 @@ class UnicodeAttackDetector(BaseDetector):
     """
 
     EMOJI_RANGE = re.compile(
-        "[\U0001F600-\U0001F64F"   # Emoticons
-        "\U0001F300-\U0001F5FF"    # Misc Symbols & Pictographs
-        "\U0001F680-\U0001F6FF"    # Transport & Map
-        "\U0001F1E0-\U0001F1FF"    # Flags
-        "\U00002702-\U000027B0"    # Dingbats
-        "\U000024C2-\U0001F251"    # Enclosed characters
-        "\U0001F900-\U0001F9FF"    # Supplemental Symbols
-        "\U0001FA00-\U0001FA6F"    # Chess Symbols
-        "\U0001FA70-\U0001FAFF"    # Symbols Extended-A
-        "\U00002600-\U000026FF"    # Misc symbols
-        "\U0000FE00-\U0000FE0F"    # Variation selectors
+        "[\U0001f600-\U0001f64f"  # Emoticons
+        "\U0001f300-\U0001f5ff"  # Misc Symbols & Pictographs
+        "\U0001f680-\U0001f6ff"  # Transport & Map
+        "\U0001f1e0-\U0001f1ff"  # Flags
+        "\U00002702-\U000027b0"  # Dingbats
+        "\U000024c2-\U0001f251"  # Enclosed characters
+        "\U0001f900-\U0001f9ff"  # Supplemental Symbols
+        "\U0001fa00-\U0001fa6f"  # Chess Symbols
+        "\U0001fa70-\U0001faff"  # Symbols Extended-A
+        "\U00002600-\U000026ff"  # Misc symbols
+        "\U0000fe00-\U0000fe0f"  # Variation selectors
         "]"
     )
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
         self._zw_score_per_char = config.get("zw_score_per_char", 5)
         self._bidi_score_per_char = config.get("bidi_score_per_char", 10)
@@ -407,14 +403,13 @@ class UnicodeAttackDetector(BaseDetector):
     def name(self) -> str:
         return "unicode_attack"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         text = f"{subject}\n{body}"
         score = 0
-        details: List[str] = []
+        details: list[str] = []
 
         # ── Zero-Width Character Scan ──
-        zw_found: Dict[str, str] = {}
+        zw_found: dict[str, int] = {}
         for char, name in ZERO_WIDTH_CHARS.items():
             count = text.count(char)
             if count:
@@ -424,12 +419,10 @@ class UnicodeAttackDetector(BaseDetector):
             total_zw = sum(zw_found.values())
             score += total_zw * self._zw_score_per_char
             desc = ", ".join(f"{name}={n}" for name, n in zw_found.items())
-            details.append(
-                f"Zero-width characters detected ({total_zw} total): {desc}"
-            )
+            details.append(f"Zero-width characters detected ({total_zw} total): {desc}")
 
         # ── BIDI Override Scan ──
-        bidi_found: Dict[str, str] = {}
+        bidi_found: dict[str, int] = {}
         for char, name in BIDI_OVERRIDE_CHARS.items():
             count = text.count(char)
             if count:
@@ -439,12 +432,10 @@ class UnicodeAttackDetector(BaseDetector):
             total_bidi = sum(bidi_found.values())
             score += total_bidi * self._bidi_score_per_char
             desc = ", ".join(f"{name}={n}" for name, n in bidi_found.items())
-            details.append(
-                f"Bidirectional override characters ({total_bidi} total): {desc}"
-            )
+            details.append(f"Bidirectional override characters ({total_bidi} total): {desc}")
 
         # ── Homoglyph Scan ──
-        homoglyph_found: Dict[str, Tuple[str, int]] = {}
+        homoglyph_found: dict[str, tuple[str, int]] = {}
         for char, replacement in HOMOGLYPH_MAP.items():
             count = text.count(char)
             if count:
@@ -453,12 +444,9 @@ class UnicodeAttackDetector(BaseDetector):
         if homoglyph_found:
             score += self._homoglyph_score
             char_preview = ", ".join(
-                f"'{c}'→'{r}' (×{n})"
-                for c, (r, n) in homoglyph_found.items()
+                f"'{c}'->'{r}' (x{n})" for c, (r, n) in homoglyph_found.items()
             )
-            details.append(
-                f"Homoglyph substitutions detected: {char_preview}"
-            )
+            details.append(f"Homoglyph substitutions detected: {char_preview}")
 
         # ── Emoji Steganography Check ──
         emoji_count = len(self.EMOJI_RANGE.findall(text))
@@ -484,6 +472,7 @@ class UnicodeAttackDetector(BaseDetector):
 # Detector 5: Structural Anomaly Detector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class StructuralAnomalyDetector(BaseDetector):
     """
     Detects structural anomalies in email:
@@ -494,9 +483,9 @@ class StructuralAnomalyDetector(BaseDetector):
     """
 
     # Match encoded-word in headers like =?utf-8?B?...?=
-    ENCODED_WORD_RE = re.compile(r'=\?[^?]+\?[BbQq]\?[^?]*\?=')
+    ENCODED_WORD_RE = re.compile(r"=\?[^?]+\?[BbQq]\?[^?]*\?=")
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
         self._max_headers = config.get("max_headers", 50)
         self._check_mime = config.get("check_mime", True)
@@ -506,10 +495,9 @@ class StructuralAnomalyDetector(BaseDetector):
     def name(self) -> str:
         return "structural_anomaly"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         score = 0
-        details: List[str] = []
+        details: list[str] = []
 
         # ── Content-Type Check ──
         if self._check_mime:
@@ -522,35 +510,27 @@ class StructuralAnomalyDetector(BaseDetector):
                         break
 
         # ── Encoded filenames in headers ──
+        # ── Encoded filenames in headers ──
         for key, value in headers.items():
-            if ("filename" in key.lower() or "name" in key.lower()
-                    or "filename" in value.lower() or "name" in value.lower()):
-                if self.ENCODED_WORD_RE.search(value):
-                    score += 15
-                    details.append(
-                        f"Encoded attachment filename in header {key}"
-                    )
+            name_key = "filename" in key.lower() or "name" in key.lower()
+            name_value = "filename" in value.lower() or "name" in value.lower()
+            if (name_key or name_value) and self.ENCODED_WORD_RE.search(value):
+                score += 15
+                details.append(f"Encoded attachment filename in header {key}")
 
         # ── Excessive headers ──
         if len(headers) > self._max_headers:
             score += 10
-            details.append(
-                f"Excessive headers: {len(headers)} > {self._max_headers}"
-            )
+            details.append(f"Excessive headers: {len(headers)} > {self._max_headers}")
 
         # ── Suspicious attachment extensions in body ──
         if self._check_attachments:
             for ext in SUSPICIOUS_ATTACHMENT_EXTENSIONS:
                 # Look for filename patterns in the body
-                pattern = re.compile(
-                    re.escape(ext) + r'\b',
-                    re.IGNORECASE
-                )
+                pattern = re.compile(re.escape(ext) + r"\b", re.IGNORECASE)
                 if pattern.search(body) or pattern.search(subject):
                     score += 10
-                    details.append(
-                        f"Suspicious attachment extension in content: {ext}"
-                    )
+                    details.append(f"Suspicious attachment extension in content: {ext}")
                     break
 
         score = min(score, 100)
@@ -565,6 +545,7 @@ class StructuralAnomalyDetector(BaseDetector):
 # Detector 6: Reply-Chain Manipulation Detector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class ReplyChainManipulationDetector(BaseDetector):
     """
     Detects reply-chain manipulation — where quoted/replied-to text contains
@@ -574,12 +555,10 @@ class ReplyChainManipulationDetector(BaseDetector):
     that the user might not notice but the AI would process.
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
         self._quote_patterns = [
-            re.compile(q, re.MULTILINE) for q in config.get(
-                "quote_prefixes", QUOTE_PREFIXES
-            )
+            re.compile(q, re.MULTILINE) for q in config.get("quote_prefixes", QUOTE_PREFIXES)
         ]
         self._suspicious_patterns = compile_suspicious_decoded()
 
@@ -587,8 +566,7 @@ class ReplyChainManipulationDetector(BaseDetector):
     def name(self) -> str:
         return "reply_chain_manipulation"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         if not body:
             return DetectorResult(risk_score=0, triggered=False)
 
@@ -625,11 +603,11 @@ class ReplyChainManipulationDetector(BaseDetector):
 
         return DetectorResult(risk_score=0, triggered=False)
 
-    def _split_quoted(self, body: str) -> Tuple[str, str]:
+    def _split_quoted(self, body: str) -> tuple[str, str]:
         """Split body into quoted and new text sections."""
         lines = body.split("\n")
-        quoted_lines: List[str] = []
-        new_lines: List[str] = []
+        quoted_lines: list[str] = []
+        new_lines: list[str] = []
         in_quoted = False
 
         for line in lines:
@@ -665,6 +643,7 @@ class ReplyChainManipulationDetector(BaseDetector):
 # Detector 7: Repetition Detector
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class RepetitionDetector(BaseDetector):
     """
     Detects excessive repetition designed to overwhelm context or bypass
@@ -677,7 +656,7 @@ class RepetitionDetector(BaseDetector):
     - Padding patterns (repeated whitespace/separators)
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
         self._ngram_size = config.get("ngram_size", 5)
         self._max_repetition_ratio = config.get("max_repetition_ratio", 0.50)
@@ -687,13 +666,12 @@ class RepetitionDetector(BaseDetector):
     def name(self) -> str:
         return "repetition"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         if not body:
             return DetectorResult(risk_score=0, triggered=False)
 
         score = 0
-        details: List[str] = []
+        details: list[str] = []
 
         text = f"{subject}\n{body}"
 
@@ -713,32 +691,31 @@ class RepetitionDetector(BaseDetector):
             details=details,
         )
 
-    def _check_line_repetition(self, body: str, details: List[str]) -> int:
+    def _check_line_repetition(self, body: str, details: list[str]) -> int:
         """Check for repeated lines."""
-        lines = [l.strip() for l in body.split("\n") if l.strip()]
+        lines = [line.strip() for line in body.split("\n") if line.strip()]
         if not lines:
             return 0
 
         from collections import Counter
+
         line_counts = Counter(lines)
-        repeated = {line: count for line, count in line_counts.most_common(5)
-                    if count >= self._min_line_repeat}
+        repeated = {
+            line: count
+            for line, count in line_counts.most_common(5)
+            if count >= self._min_line_repeat
+        }
 
         if repeated:
             total = sum(repeated.values())
-            line_desc = "; ".join(
-                f"'{l[:40]}' ×{n}" for l, n in repeated.items()
-            )
-            details.append(
-                f"Excessive line repetition: {total} repeated lines. "
-                f"{line_desc}"
-            )
+            line_desc = "; ".join(f"'{line[:40]}' x{n}" for line, n in repeated.items())
+            details.append(f"Excessive line repetition: {total} repeated lines. {line_desc}")
             # Scale: 3 repeats = 10, 10+ repeats = 50
             return min(50, total * 5)
 
         return 0
 
-    def _check_ngram_repetition(self, text: str, details: List[str]) -> int:
+    def _check_ngram_repetition(self, text: str, details: list[str]) -> int:
         """Check for dominant n-grams (context filler)."""
         # Only check words, skip whitespace
         words = text.split()
@@ -746,9 +723,9 @@ class RepetitionDetector(BaseDetector):
             return 0
 
         # Build n-grams as tuples of words
-        ngrams: Dict[Tuple[str, ...], int] = {}
+        ngrams: dict[tuple[str, ...], int] = {}
         for i in range(len(words) - self._ngram_size + 1):
-            ngram = tuple(words[i:i + self._ngram_size])
+            ngram = tuple(words[i : i + self._ngram_size])
             # Skip n-grams containing only noise
             if all(len(w) <= 2 for w in ngram):
                 continue
@@ -771,11 +748,12 @@ class RepetitionDetector(BaseDetector):
 
         return 0
 
-    def _check_character_padding(self, text: str, details: List[str]) -> int:
+    def _check_character_padding(self, text: str, details: list[str]) -> int:
         """Detect excessive single-character repetition (padding)."""
         # Count runs of same character
         from collections import Counter
-        char_runs = Counter()
+
+        char_runs: Counter[str] = Counter()
         current_char = ""
         run_length = 0
 
@@ -784,17 +762,13 @@ class RepetitionDetector(BaseDetector):
                 run_length += 1
             else:
                 if run_length >= 5:
-                    char_runs[current_char] = max(
-                        char_runs.get(current_char, 0), run_length
-                    )
+                    char_runs[current_char] = max(char_runs.get(current_char, 0), run_length)
                 current_char = ch
                 run_length = 1
 
         # Final run
         if run_length >= 5:
-            char_runs[current_char] = max(
-                char_runs.get(current_char, 0), run_length
-            )
+            char_runs[current_char] = max(char_runs.get(current_char, 0), run_length)
 
         if char_runs:
             total_repeated = sum(char_runs.values())
@@ -812,7 +786,8 @@ class RepetitionDetector(BaseDetector):
 
             if non_padding_total > 50:
                 desc = "; ".join(
-                    f"'{c}' ×{n}" for c, n in char_runs.items()
+                    f"'{c}' x{n}"
+                    for c, n in char_runs.items()
                     if c not in padding_chars and n >= 10
                 )
                 if desc:
@@ -825,6 +800,7 @@ class RepetitionDetector(BaseDetector):
 # ═══════════════════════════════════════════════════════════════════════════════
 # Detector 8: Sensitive Data Exfiltration Detector
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class ExfiltrationGuardDetector(BaseDetector):
     """
@@ -855,7 +831,7 @@ class ExfiltrationGuardDetector(BaseDetector):
 
     # Patterns for sensitive info requests — word boundaries matter here
     # to avoid false positives on "key" in "keyboard" or "api" in "apical"
-    EXFIL_PATTERNS: Dict[str, List[str]] = {
+    EXFIL_PATTERNS: dict[str, list[str]] = {
         "tier1": [
             r"send\s+me\s+(your\s+)?(key|password|secret|credential|token|api[\s-]*key)",
             r"give\s+me\s+(your\s+)?(key|password|secret|credential|token|access)",
@@ -881,31 +857,35 @@ class ExfiltrationGuardDetector(BaseDetector):
         ],
     }
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
-        self._patterns: Dict[str, List[Pattern]] = {}
+        self._patterns: dict[str, list[Pattern]] = {}
         for tier, patterns in self.EXFIL_PATTERNS.items():
             enabled = config.get(f"{tier}_enabled", True)
             if enabled:
                 compiled = [re.compile(p, re.IGNORECASE) for p in patterns]
                 self._patterns[tier] = compiled
-        self._enabled_tiers: Set[str] = set(self._patterns.keys())
+        self._enabled_tiers: set[str] = set(self._patterns.keys())
 
         # Sender trust: if from YOUR trusted domain, reduce suspicion
-        self._trusted_domains = config.get("trusted_domains", [
-            "gmx.de", "gmx.net",
-            "github.com", "thunderbird.net",
-        ])
+        self._trusted_domains = config.get(
+            "trusted_domains",
+            [
+                "gmx.de",
+                "gmx.net",
+                "github.com",
+                "thunderbird.net",
+            ],
+        )
 
     @property
     def name(self) -> str:
         return "exfiltration_guard"
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Dict[str, str]) -> DetectorResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict[str, str]) -> DetectorResult:
         text = f"{subject}\n{body}\n{subject}".lower()
         score = 0
-        details: List[str] = []
+        details: list[str] = []
 
         # Reduce score if sender is from a known safe domain
         domain_penalty = 0
@@ -924,8 +904,7 @@ class ExfiltrationGuardDetector(BaseDetector):
                     pts = max(0, self.TIER_SCORES[tier] - domain_penalty)
                     score += pts
                     details.append(
-                        f"Exfiltration attempt [{tier}] (+{pts}): "
-                        f"matched '{match.group()}'"
+                        f"Exfiltration attempt [{tier}] (+{pts}): matched '{match.group()}'"
                     )
                     break  # one match per tier is enough
 
@@ -941,6 +920,7 @@ class ExfiltrationGuardDetector(BaseDetector):
 # Main EmailScanner
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class EmailScanner:
     """
     Main scanner orchestrator. Runs all detectors and aggregates scores.
@@ -953,7 +933,8 @@ class EmailScanner:
 
     # Default config baked in to avoid file dependency
     DEFAULT_CONFIG = {
-        "block_threshold": 60,  # TODO: tune after 30+ real scans — track FP rate in Storage/email-guardrail-fp-log.md
+        # TODO: tune after 30+ real scans; track FP rate in Storage/email-guardrail-fp-log.md
+        "block_threshold": 60,
         "prompt_injection": {"tier1_enabled": True, "tier2_enabled": True, "tier3_enabled": True},
         "encoding_anomaly": {"min_base64_length": 40, "decode_nested": True},
         "size_guard": {
@@ -986,32 +967,31 @@ class EmailScanner:
         },
     }
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         self._config = self._load_config(config)
-        self._block_threshold = self._config.get("block_threshold", self.DEFAULT_CONFIG["block_threshold"])
-        self._detectors: List[BaseDetector] = self._init_detectors()
+        self._block_threshold = self._config.get(
+            "block_threshold", self.DEFAULT_CONFIG["block_threshold"]
+        )
+        self._detectors: list[BaseDetector] = self._init_detectors()
 
-    def _load_config(self, config: Optional[dict] = None) -> dict:
+    def _load_config(self, config: dict | str | None = None) -> dict:
         """Load config from dict, JSON string, or JSON file path."""
         if config is None:
             return dict(self.DEFAULT_CONFIG)
 
         if isinstance(config, str):
-            if os.path.isfile(config):
-                with open(config, "r") as f:
-                    return {**self.DEFAULT_CONFIG, **json.load(f)}
+            path = Path(config)
+            if path.is_file():
+                return {**self.DEFAULT_CONFIG, **json.loads(path.read_text(encoding="utf-8"))}
             # Try as JSON string
             try:
                 return {**self.DEFAULT_CONFIG, **json.loads(config)}
             except json.JSONDecodeError:
                 return dict(self.DEFAULT_CONFIG)
 
-        if isinstance(config, dict):
-            return {**self.DEFAULT_CONFIG, **config}
+        return {**self.DEFAULT_CONFIG, **config}
 
-        return dict(self.DEFAULT_CONFIG)
-
-    def _init_detectors(self) -> List[BaseDetector]:
+    def _init_detectors(self) -> list[BaseDetector]:
         """Instantiate all detectors with their subsection of config."""
         return [
             PromptInjectionDetector(self._config.get("prompt_injection", {})),
@@ -1024,8 +1004,7 @@ class EmailScanner:
             ExfiltrationGuardDetector(self._config.get("exfiltration_guard", {})),
         ]
 
-    def scan(self, sender: str, subject: str, body: str,
-             headers: Optional[dict] = None) -> ScanResult:
+    def scan(self, sender: str, subject: str, body: str, headers: dict | None = None) -> ScanResult:
         """
         Run the full scanner pipeline.
 
@@ -1043,8 +1022,8 @@ class EmailScanner:
         body_bytes = body.encode("utf-8")
 
         result = ScanResult(original_length=len(body_bytes))
-        all_warnings: List[str] = []
-        scores: List[int] = []
+        all_warnings: list[str] = []
+        scores: list[int] = []
         truncated = False
 
         for detector in self._detectors:
@@ -1052,7 +1031,7 @@ class EmailScanner:
             if dr.triggered:
                 scores.append(dr.risk_score)
                 all_warnings.extend(dr.details)
-            if hasattr(detector, 'truncated') and detector.truncated:
+            if hasattr(detector, "truncated") and detector.truncated:
                 truncated = True
 
         # Aggregate scores
@@ -1070,7 +1049,7 @@ class EmailScanner:
         return result
 
     @staticmethod
-    def _aggregate_scores(scores: List[int]) -> int:
+    def _aggregate_scores(scores: list[int]) -> int:
         """
         Final score = max(scores) + mean(scores) / 2, clamped to [0, 100].
 
@@ -1082,16 +1061,16 @@ class EmailScanner:
         max_s = max(scores)
         mean_s = sum(scores) / len(scores)
         raw = max_s + (mean_s / 2)
-        return min(100, max(0, int(round(raw))))
+        return min(100, max(0, round(raw)))
 
-    def _log_scan(self, sender: str, subject: str, result: 'ScanResult') -> None:
+    def _log_scan(self, sender: str, subject: str, result: "ScanResult") -> None:
         """Log every scan result into the FP tracking log."""
-        import json, os
-        log_path = os.environ.get(
+        log_path_str = os.environ.get(
             "EMAIL_GUARDRAIL_LOG",
-            os.path.expanduser("~/.mailintel/guardrail-scan-log.ndjson"),
+            str(Path.home() / ".mailintel" / "guardrail-scan-log.ndjson"),
         )
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        log_path = Path(log_path_str)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         entry = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "sender": sender,
@@ -1101,12 +1080,12 @@ class EmailScanner:
             "warnings": result.warnings[:3],
         }
         try:
-            with open(log_path, "a") as f:
+            with log_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
         except Exception:
             pass  # best-effort logging
 
     @property
-    def detectors(self) -> List[BaseDetector]:
+    def detectors(self) -> list[BaseDetector]:
         """Return the list of registered detectors (for inspection/testing)."""
         return list(self._detectors)

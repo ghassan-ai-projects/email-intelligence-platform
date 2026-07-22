@@ -23,7 +23,6 @@ import html2text
 
 from .config import Config
 from .events import emit
-from .guardrail import scan_email_parsed
 from .guardrail.db import store_guardrail_result
 from .guardrail.scanner_wrapper import scan_email_from_config
 from .security import sanitize_text
@@ -383,9 +382,7 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                         body_text=parsed.body_text,
                         guardrail_config=cfg.guardrail,
                     )
-                    store_guardrail_result(
-                        conn, email_id, gr.risk_score, gr.blocked, gr.warnings
-                    )
+                    store_guardrail_result(conn, email_id, gr.risk_score, gr.blocked, gr.warnings)
 
                 conn.execute(
                     "INSERT OR REPLACE INTO sync_state (folder, uniq, filename, email_id, account) "

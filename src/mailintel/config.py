@@ -152,9 +152,7 @@ class GuardrailConfig(BaseModel):
     block_threshold: int = 60
     scan_on_ingest: bool = True
     trusted_domains: list[str] = ["gmx.de", "gmx.net", "github.com", "thunderbird.net"]
-    contacts_path: Path | None = Field(
-        default_factory=lambda: DEFAULT_CONFIG_DIR / "contacts.json"
-    )
+    contacts_path: Path | None = Field(default_factory=lambda: DEFAULT_CONFIG_DIR / "contacts.json")
     # Per-detector overrides are passed as-is to EmailScanner._load_config.
     prompt_injection: dict | None = None
     encoding_anomaly: dict | None = None

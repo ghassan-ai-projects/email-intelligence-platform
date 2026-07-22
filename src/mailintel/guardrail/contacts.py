@@ -97,9 +97,7 @@ class ContactsDB:
         """
         addr = addr.lower().strip()
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-        existing = self._conn.execute(
-            "SELECT id FROM contacts WHERE addr = ?", (addr,)
-        ).fetchone()
+        existing = self._conn.execute("SELECT id FROM contacts WHERE addr = ?", (addr,)).fetchone()
 
         if existing:
             updates: list[str] = []
