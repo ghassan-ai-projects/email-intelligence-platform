@@ -142,11 +142,22 @@ def delete_draft(conn: sqlite3.Connection, draft_id: int) -> dict:
 
 
 def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
+    # Atomically claim the draft so concurrent sends can't double-send.
+    cur = conn.execute(
+        "UPDATE drafts SET status = 'sending', updated_at = ? WHERE id = ? AND status = 'draft'",
+        (_now(), draft_id),
+    )
+    if cur.rowcount == 0:
+        row = conn.execute(
+            "SELECT status, sent_at FROM drafts WHERE id = ?", (draft_id,)
+        ).fetchone()
+        if not row:
+            return {"error": f"draft {draft_id} not found"}
+        if row["status"] == "sent":
+            return {"error": f"draft {draft_id} was already sent at {row['sent_at']}"}
+        return {"error": f"draft {draft_id} is not in a sendable state ({row['status']})"}
     row = conn.execute("SELECT * FROM drafts WHERE id = ?", (draft_id,)).fetchone()
-    if not row:
-        return {"error": f"draft {draft_id} not found"}
-    if row["status"] == "sent":
-        return {"error": f"draft {draft_id} was already sent at {row['sent_at']}"}
+    assert row is not None
     draft = _row_to_dict(row)
     try:
         result = send_email(
@@ -160,6 +171,12 @@ def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
             in_reply_to_email_id=draft["in_reply_to_email_id"],
         )
     except SendError as exc:
+        # Roll back the claim so the draft can be retried.
+        conn.execute(
+            "UPDATE drafts SET status = 'draft', updated_at = ? WHERE id = ?",
+            (_now(), draft_id),
+        )
+        conn.commit()
         return {"error": str(exc), "draft_id": draft_id}
     now = _now()
     conn.execute(

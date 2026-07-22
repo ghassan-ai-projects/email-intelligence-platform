@@ -227,5 +227,64 @@ def stats() -> None:
         conn.close()
 
 
+@app.command()
+def contacts_import(
+    path: str = typer.Argument(
+        None,
+        help="JSON file to import (defaults to ~/.mailintel/contacts.json).",
+    ),
+) -> None:
+    """Import contacts from a JSON file into the contacts table."""
+    cfg = _cfg()
+    conn = db.connect(cfg.storage.db_path)
+    try:
+        count = db.import_contacts_json(conn, path)
+    finally:
+        conn.close()
+    typer.echo(f"Imported {count} contacts")
+
+
+@app.command()
+def audit(
+    limit: int = typer.Option(50, help="Maximum rows to return."),
+    tool: str = typer.Option(None, help="Filter by tool name."),
+) -> None:
+    """Inspect the MCP tool audit log."""
+    cfg = _cfg()
+    conn = db.connect(cfg.storage.db_path)
+    try:
+        if tool:
+            rows = conn.execute(
+                "SELECT id, tool, args, caller, account, result_summary, error, created_at "
+                "FROM audit_log WHERE tool = ? ORDER BY id DESC LIMIT ?",
+                (tool, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, tool, args, caller, account, result_summary, error, created_at "
+                "FROM audit_log ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    finally:
+        conn.close()
+    _echo_json([dict(r) for r in rows])
+
+
+@app.command()
+def events_prune(
+    before_id: int = typer.Argument(..., help="Delete events with id lower than this."),
+) -> None:
+    """Prune old events from the event log."""
+    from .events import prune_events
+
+    cfg = _cfg()
+    conn = db.connect(cfg.storage.db_path)
+    try:
+        deleted = prune_events(conn, before_id)
+    finally:
+        conn.close()
+    typer.echo(f"Deleted {deleted} events")
+
+
 if __name__ == "__main__":
     app()

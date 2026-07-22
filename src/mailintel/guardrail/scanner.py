@@ -890,8 +890,9 @@ class ExfiltrationGuardDetector(BaseDetector):
         # Reduce score if sender is from a known safe domain
         domain_penalty = 0
         sender_lower = sender.lower()
+        sender_domain = sender_lower.rsplit("@", 1)[-1] if "@" in sender_lower else ""
         for domain in self._trusted_domains:
-            if domain in sender_lower:
+            if sender_domain == domain or sender_domain.endswith("." + domain):
                 domain_penalty = 15  # known domain = less suspicious
                 break
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import UTC, datetime
+from typing import Any
 
 EVENT_TYPES = {
     "email_ingested",
@@ -32,9 +33,12 @@ def emit(
     conn: sqlite3.Connection,
     event_type: str,
     email_id: int | None = None,
-    payload: dict | None = None,
+    payload: dict[str, Any] | None = None,
     account: str = "default",
 ) -> int:
+    if event_type not in EVENT_TYPES:
+        msg = f"unknown event type: {event_type!r}"
+        raise ValueError(msg)
     cur = conn.execute(
         "INSERT INTO events (type, email_id, payload, account, created_at) VALUES (?, ?, ?, ?, ?)",
         (
@@ -45,8 +49,17 @@ def emit(
             datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
         ),
     )
-    assert cur.lastrowid is not None
+    if cur.lastrowid is None:
+        msg = "failed to insert event"
+        raise RuntimeError(msg)
     return cur.lastrowid
+
+
+def prune_events(conn: sqlite3.Connection, before_id: int) -> int:
+    """Delete events with id < before_id. Returns the number deleted."""
+    cur = conn.execute("DELETE FROM events WHERE id < ?", (before_id,))
+    conn.commit()
+    return cur.rowcount
 
 
 def get_events_since(
@@ -54,14 +67,15 @@ def get_events_since(
     cursor: int = 0,
     types: list[str] | None = None,
     limit: int = 100,
-) -> dict:
+) -> dict[str, Any]:
     """Events with id > cursor, oldest first. Returns next_cursor to persist.
 
     `latest_cursor` is always the newest event id in the store, so a consumer
     can fast-forward past types it filtered out.
     """
+    cursor = max(0, cursor)
     limit = max(1, min(limit, 500))
-    params: list = [cursor]
+    params: list[Any] = [cursor]
     sql = "SELECT * FROM events WHERE id > ?"
     if types:
         sql += f" AND type IN ({','.join('?' * len(types))})"

@@ -145,6 +145,8 @@ def knn_email_ids(
             "WHERE embedding MATCH ? AND k = ? ORDER BY distance",
             (serialize_f32(query_vec), k),
         ).fetchall()
-    except sqlite3.OperationalError:
-        return []  # vec table not created yet (nothing embedded)
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc).lower():
+            return []  # vec table not created yet (nothing embedded)
+        raise
     return [(r["email_id"], r["distance"]) for r in rows]

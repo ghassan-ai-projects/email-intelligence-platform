@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
-from .search import email_row_brief
+from .search import _like_escape, email_row_brief
 
 
 def _email_context(conn: sqlite3.Connection, email_id: int) -> dict:
@@ -34,8 +34,8 @@ def find_action_items(
     where = ["1=1"] if status == "all" else ["a.status = ?"]
     params: list = [] if status == "all" else [status]
     if owner:
-        where.append("a.owner LIKE ?")
-        params.append(f"%{owner}%")
+        where.append("a.owner LIKE ? ESCAPE '\\'")
+        params.append(f"%{_like_escape(owner)}%")
     if due_before:
         where.append("a.due_date IS NOT NULL AND a.due_date <= ?")
         params.append(due_before)
@@ -69,8 +69,8 @@ def search_facts(
     where: list[str] = []
     params: list = []
     if query:
-        where.append("f.fact LIKE ?")
-        params.append(f"%{query}%")
+        where.append("f.fact LIKE ? ESCAPE '\\'")
+        params.append(f"%{_like_escape(query)}%")
     if category:
         where.append("f.category = ?")
         params.append(category)
@@ -104,11 +104,11 @@ def find_decisions(
 
 
 def summarize_sender(conn: sqlite3.Connection, addr: str, recent: int = 10) -> dict:
-    like = f"%{addr}%"
+    like = f"%{_like_escape(addr)}%"
     agg = conn.execute(
         "SELECT COUNT(*) AS total, MIN(date_utc) AS first_date, MAX(date_utc) AS last_date, "
         "SUM(has_attachments) AS with_attachments, SUM(1 - is_read) AS unread "
-        "FROM emails WHERE from_addr LIKE ? AND is_sent = 0",
+        "FROM emails WHERE from_addr LIKE ? ESCAPE '\\' AND is_sent = 0",
         (like,),
     ).fetchone()
     top_topics = [
@@ -117,19 +117,19 @@ def summarize_sender(conn: sqlite3.Connection, addr: str, recent: int = 10) -> d
             "SELECT en.name, COUNT(*) AS n FROM email_entities ee "
             "JOIN entities en ON en.id = ee.entity_id "
             "JOIN emails e ON e.id = ee.email_id "
-            "WHERE e.from_addr LIKE ? AND en.type = 'topic' "
+            "WHERE e.from_addr LIKE ? ESCAPE '\\' AND en.type = 'topic' "
             "GROUP BY en.id ORDER BY n DESC LIMIT 10",
             (like,),
         )
     ]
     recent_rows = conn.execute(
-        "SELECT * FROM emails WHERE from_addr LIKE ? AND is_sent = 0 "
+        "SELECT * FROM emails WHERE from_addr LIKE ? ESCAPE '\\' AND is_sent = 0 "
         "ORDER BY date_utc DESC LIMIT ?",
         (like, recent),
     ).fetchall()
     open_items = conn.execute(
         "SELECT COUNT(*) AS n FROM action_items a JOIN emails e ON e.id = a.email_id "
-        "WHERE e.from_addr LIKE ? AND a.status = 'open'",
+        "WHERE e.from_addr LIKE ? ESCAPE '\\' AND a.status = 'open'",
         (like,),
     ).fetchone()["n"]
     return {

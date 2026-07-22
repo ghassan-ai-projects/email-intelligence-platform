@@ -376,13 +376,20 @@ def ingest(conn: sqlite3.Connection, cfg: Config) -> IngestStats:
                     )
 
                     # ── Guardrail scan ──
-                    gr = scan_email_from_config(
-                        from_addr=parsed.from_addr,
-                        subject=parsed.subject,
-                        body_text=parsed.body_text,
-                        guardrail_config=cfg.guardrail,
-                    )
-                    store_guardrail_result(conn, email_id, gr.risk_score, gr.blocked, gr.warnings)
+                    if cfg.guardrail.scan_on_ingest:
+                        try:
+                            gr = scan_email_from_config(
+                                from_addr=parsed.from_addr,
+                                subject=parsed.subject,
+                                body_text=parsed.body_text,
+                                guardrail_config=cfg.guardrail,
+                            )
+                            store_guardrail_result(
+                                conn, email_id, gr.risk_score, gr.blocked, gr.warnings
+                            )
+                        except Exception:
+                            # Never let a scanner failure abort the sync run.
+                            pass
 
                 conn.execute(
                     "INSERT OR REPLACE INTO sync_state (folder, uniq, filename, email_id, account) "

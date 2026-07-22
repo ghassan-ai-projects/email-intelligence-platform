@@ -86,14 +86,14 @@ class ContactsDB:
     def register_contact(
         self,
         addr: str,
-        name: str = "",
-        tier: str = "unknown",
-        notes: str = "",
+        name: str | None = None,
+        tier: str | None = None,
+        notes: str | None = None,
     ) -> ContactInfo:
         """Register a new contact or update an existing one.
 
-        If the address already exists, only *name*, *notes* and *tier* are
-        updated when the provided values are non-empty/non-default.
+        If the address already exists, only non-None fields are updated.
+        Pass tier="unknown" explicitly to demote a contact.
         """
         addr = addr.lower().strip()
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
@@ -102,13 +102,16 @@ class ContactsDB:
         if existing:
             updates: list[str] = []
             params: list[Any] = []
-            if tier != "unknown":
+            if tier is not None:
+                if tier not in ("trusted", "known", "unknown"):
+                    msg = f"invalid tier: {tier!r} (choose: trusted, known, unknown)"
+                    raise ValueError(msg)
                 updates.append("tier = ?")
                 params.append(tier)
-            if name:
+            if name is not None:
                 updates.append("name = ?")
                 params.append(name)
-            if notes:
+            if notes is not None:
                 updates.append("notes = ?")
                 params.append(notes)
             if updates:
@@ -124,7 +127,14 @@ class ContactsDB:
             cur = self._conn.execute(
                 "INSERT INTO contacts (addr, name, tier, notes, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (addr, name, tier, notes, now, now),
+                (
+                    addr,
+                    name or "",
+                    tier or "unknown",
+                    notes or "",
+                    now,
+                    now,
+                ),
             )
             contact_id = cur.lastrowid
             assert contact_id is not None

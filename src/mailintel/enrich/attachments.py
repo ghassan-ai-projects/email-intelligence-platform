@@ -8,6 +8,8 @@ import io
 import sqlite3
 from pathlib import Path
 
+from ..security import sanitize_text
+
 MAX_PDF_PAGES = 20
 MAX_TEXT_CHARS = 20_000
 
@@ -99,7 +101,7 @@ def extract_email_attachments(conn: sqlite3.Connection, email_id: int, maildir_r
         if not payload:
             continue
         try:
-            text = extract_pdf_text(payload)
+            text = sanitize_text(extract_pdf_text(payload))
         except Exception:
             continue
         if text:

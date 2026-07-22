@@ -214,6 +214,11 @@ class TestContactsDB:
         info = contacts.update_tier("bob@example.com", "known")
         assert info.tier == "known"
 
+    def test_update_tier_demote_to_unknown(self, contacts):
+        contacts.register_contact("carol@example.com", tier="trusted")
+        info = contacts.update_tier("carol@example.com", "unknown")
+        assert info.tier == "unknown"
+
     def test_update_tier_invalid(self, contacts):
         with pytest.raises(ValueError):
             contacts.update_tier("bob@example.com", "suspicious")

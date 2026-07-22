@@ -179,7 +179,6 @@ SUSPICIOUS_CONTENT_TYPES: list[str] = [
     "application/x-sh",
     "application/x-vbs",
     "application/x-httpd-php",
-    "text/html",
 ]
 
 SUSPICIOUS_ATTACHMENT_EXTENSIONS: list[str] = [
