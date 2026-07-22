@@ -27,6 +27,14 @@ def test_recipient_allowed_patterns():
     assert recipient_allowed("Boss@ACME.com", ["*@acme.com"])
 
 
+def test_recipient_allowed_rejects_invalid_addresses():
+    assert not recipient_allowed("", ["*"])
+    assert not recipient_allowed("not-an-email", ["*"])
+    assert not recipient_allowed("@acme.com", ["*"])
+    assert not recipient_allowed("alice@", ["*"])
+    assert recipient_allowed("alice@acme.com", ["*"])
+
+
 def test_ingest_sanitizes_hidden_injection(conn, cfg, maildir):
     write_message(
         maildir,

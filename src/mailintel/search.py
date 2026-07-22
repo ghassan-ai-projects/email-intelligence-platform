@@ -9,6 +9,11 @@ from typing import Any
 _TOKEN = re.compile(r'"[^"]*"|\S+')
 
 
+def _like_escape(text: str) -> str:
+    """Escape LIKE wildcards in user-supplied search filters."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def fts_query(user_query: str) -> str:
     """Sanitize free text into an FTS5 query: quoted terms ANDed, phrases preserved."""
     parts = []
@@ -69,11 +74,16 @@ def search_emails(
         where.append("e.id IN (SELECT rowid FROM emails_fts WHERE emails_fts MATCH ?)")
         params.append(fts_query(query))
     if from_addr:
-        where.append("(e.from_addr LIKE ? OR e.from_name LIKE ?)")
-        params.extend([f"%{from_addr}%", f"%{from_addr}%"])
+        escaped = _like_escape(from_addr)
+        where.append("(e.from_addr LIKE ? ESCAPE '\\' OR e.from_name LIKE ? ESCAPE '\\')")
+        params.extend([f"%{escaped}%", f"%{escaped}%"])
     if to_addr:
-        where.append("e.id IN (SELECT email_id FROM recipients WHERE addr LIKE ? OR name LIKE ?)")
-        params.extend([f"%{to_addr}%", f"%{to_addr}%"])
+        escaped = _like_escape(to_addr)
+        where.append(
+            "e.id IN (SELECT email_id FROM recipients "
+            "WHERE addr LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')"
+        )
+        params.extend([f"%{escaped}%", f"%{escaped}%"])
     if folder:
         where.append("e.folder = ?")
         params.append(folder)

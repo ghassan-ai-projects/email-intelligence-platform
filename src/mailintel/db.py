@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import sqlite_vec
@@ -243,43 +245,47 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)
     _migrate(conn)
-    # Import known contacts from JSON into the contacts table.
-    _import_contacts_json(conn)
     return conn
 
 
-def _import_contacts_json(conn: sqlite3.Connection) -> None:
-    """Import contacts from ~/.mailintel/contacts.json into the SQLite contacts table."""
-    import json
-    from datetime import UTC, datetime
-    from pathlib import Path
+def import_contacts_json(conn: sqlite3.Connection, path: Path | str | None = None) -> int:
+    """Import contacts from a JSON file into the contacts table.
 
-    path = Path.home() / ".mailintel" / "contacts.json"
+    Defaults to ~/.mailintel/contacts.json. Returns the number of contacts
+    inserted or updated. Malformed files or entries are skipped.
+    """
+    if path is None:
+        path = Path.home() / ".mailintel" / "contacts.json"
+    path = Path(path)
     if not path.exists():
-        return
+        return 0
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return
+        return 0
+    if not isinstance(data, dict):
+        return 0
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    count = 0
     for entry in data.get("contacts", []):
-        addr = entry.get("addr", "").lower().strip()
+        if not isinstance(entry, dict):
+            continue
+        addr = str(entry.get("addr", "")).lower().strip()
         if not addr:
             continue
         existing = conn.execute("SELECT id FROM contacts WHERE addr = ?", (addr,)).fetchone()
         if existing:
-            # Update tier/name/notes if provided.
-            updates = []
-            params = []
+            updates: list[str] = []
+            params: list[str] = []
             for field in ("tier", "name", "notes"):
                 val = entry.get(field)
                 if val:
                     updates.append(f"{field} = ?")
-                    params.append(val)
+                    params.append(str(val))
             if updates:
                 updates.append("updated_at = ?")
                 params.append(now)
-                params.append(existing["id"])
+                params.append(str(existing["id"]))
                 conn.execute(f"UPDATE contacts SET {', '.join(updates)} WHERE id = ?", params)
         else:
             conn.execute(
@@ -287,14 +293,16 @@ def _import_contacts_json(conn: sqlite3.Connection) -> None:
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     addr,
-                    entry.get("name", ""),
-                    entry.get("tier", "unknown"),
-                    entry.get("notes", ""),
+                    str(entry.get("name", "")),
+                    str(entry.get("tier", "unknown")),
+                    str(entry.get("notes", "")),
                     now,
                     now,
                 ),
             )
+        count += 1
     conn.commit()
+    return count
 
 
 def _migrate(conn: sqlite3.Connection) -> None:

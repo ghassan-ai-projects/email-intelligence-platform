@@ -50,6 +50,26 @@ def _mark(conn: sqlite3.Connection, job_id: int, status: str, error: str | None 
     )
 
 
+def _reset_stale_running(conn: sqlite3.Connection, max_age_seconds: int = 3600) -> None:
+    """Reset jobs stuck in 'running' back to 'pending' after a crash."""
+    cutoff = datetime.now(UTC).timestamp() - max_age_seconds
+    cutoff_str = datetime.fromtimestamp(cutoff, UTC).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        "UPDATE pipeline_jobs SET status = 'pending' WHERE status = 'running' AND updated_at < ?",
+        (cutoff_str,),
+    )
+
+
+def _claim_job(conn: sqlite3.Connection, job_id: int) -> bool:
+    """Atomically claim a pending/failed job for processing."""
+    cur = conn.execute(
+        "UPDATE pipeline_jobs SET status = 'running', updated_at = ? "
+        "WHERE id = ? AND status IN ('pending', 'failed')",
+        (_now(), job_id),
+    )
+    return cur.rowcount == 1
+
+
 def _pending_jobs(
     conn: sqlite3.Connection, stage: str, max_attempts: int, limit: int
 ) -> list[sqlite3.Row]:
@@ -131,6 +151,7 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
             "summary": sanitize_text(result.summary),
             "language": result.language,
         },
+        account=account,
     )
     entity_lists = [
         ("person", result.entities.people),
@@ -158,8 +179,11 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
 
 
 def run_attachments_stage(conn: sqlite3.Connection, cfg: Config, limit: int) -> tuple[int, int]:
+    _reset_stale_running(conn)
     done = failed = 0
     for job in _pending_jobs(conn, "attachments", cfg.enrich.max_attempts, limit):
+        if not _claim_job(conn, job["job_id"]):
+            continue
         try:
             extract_email_attachments(conn, job["id"], cfg.maildir.path)
             _mark(conn, job["job_id"], "done")
@@ -174,12 +198,15 @@ def run_attachments_stage(conn: sqlite3.Connection, cfg: Config, limit: int) -> 
 def run_enrich_stage(
     conn: sqlite3.Connection, cfg: Config, limit: int, provider: LLMProvider | None = None
 ) -> tuple[int, int]:
+    _reset_stale_running(conn)
     jobs = _pending_jobs(conn, "enrich", cfg.enrich.max_attempts, limit)
     if not jobs:
         return 0, 0
     provider = provider or make_provider(cfg.llm)
     done = failed = 0
     for job in jobs:
+        if not _claim_job(conn, job["job_id"]):
+            continue
         try:
             prompt = build_enrich_prompt(conn, job, cfg.llm)
             raw = provider.complete_json(ENRICH_SYSTEM, prompt)
@@ -197,6 +224,7 @@ def run_enrich_stage(
 def run_embed_stage(
     conn: sqlite3.Connection, cfg: Config, limit: int, embedder: Embedder | None = None
 ) -> tuple[int, int]:
+    _reset_stale_running(conn)
     # Only embed after enrichment so the summary is part of the vector; emails
     # whose enrich job terminally failed still get embedded (body-only).
     jobs = conn.execute(
@@ -217,17 +245,20 @@ def run_embed_stage(
     batch_size = cfg.embeddings.batch_size
     for i in range(0, len(jobs), batch_size):
         batch = jobs[i : i + batch_size]
-        texts = [embedding_input(j, cfg.embeddings.max_chars) for j in batch]
+        claimed = [j for j in batch if _claim_job(conn, j["job_id"])]
+        if not claimed:
+            continue
+        texts = [embedding_input(j, cfg.embeddings.max_chars) for j in claimed]
         try:
             vectors = embedder.embed_documents(texts)
-            store_embeddings(conn, [(j["id"], v) for j, v in zip(batch, vectors, strict=True)])
-            for j in batch:
+            store_embeddings(conn, [(j["id"], v) for j, v in zip(claimed, vectors, strict=True)])
+            for j in claimed:
                 _mark(conn, j["job_id"], "done")
-            done += len(batch)
+            done += len(claimed)
         except Exception as exc:
-            for j in batch:
+            for j in claimed:
                 _mark(conn, j["job_id"], "failed", str(exc)[:500])
-            failed += len(batch)
+            failed += len(claimed)
         conn.commit()
     return done, failed
 

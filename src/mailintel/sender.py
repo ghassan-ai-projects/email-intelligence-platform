@@ -32,14 +32,14 @@ def _now() -> str:
 
 
 def check_send_rate(conn: sqlite3.Connection, cfg: Config) -> None:
-    """Block if send_email/send_draft calls in the last hour exceed the cap."""
+    """Block if successful send_email/send_draft calls in the last hour exceed the cap."""
     cap = cfg.smtp.max_sends_per_hour
     if cap <= 0:
         return
     since = (datetime.now(UTC) - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
     count = conn.execute(
         "SELECT COUNT(*) FROM audit_log WHERE tool IN ('send_email', 'send_draft') "
-        "AND created_at > ?",
+        "AND created_at > ? AND error IS NULL",
         (since,),
     ).fetchone()[0]
     if count >= cap:
@@ -49,7 +49,11 @@ def check_send_rate(conn: sqlite3.Connection, cfg: Config) -> None:
 
 
 def _validated_recipients(raw: list[str], allowed: list[str]) -> list[str]:
-    addrs = [a for _, a in getaddresses(raw) if a]
+    parsed = getaddresses(raw)
+    addrs = [a for _, a in parsed if a]
+    if len(addrs) != len([r for r in raw if r.strip()]):
+        dropped = [r for r, (_, a) in zip(raw, parsed, strict=True) if r.strip() and not a]
+        raise SendError(f"Invalid recipient addresses: {', '.join(dropped)}")
     if not addrs:
         raise SendError("No valid recipient addresses given")
     for addr in addrs:

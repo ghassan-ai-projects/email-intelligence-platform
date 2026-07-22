@@ -22,9 +22,12 @@ def run_sync(cfg: Config, timeout: int = 900) -> str:
             f"Sync command '{argv[0]}' not found. Install it (e.g. `brew install isync`) "
             f"and configure ~/.mbsyncrc — see docs/mbsync-setup.md."
         )
-    proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise SyncError(f"Sync timed out after {timeout}s") from exc
     if proc.returncode != 0:
         raise SyncError(
             f"Sync command failed (exit {proc.returncode}):\n{proc.stderr.strip()[:2000]}"
         )
-    return proc.stdout.strip()
+    return proc.stdout.strip()[-2000:]

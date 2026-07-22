@@ -40,4 +40,6 @@ def recipient_allowed(addr: str, patterns: list[str]) -> bool:
     if not patterns:
         return True
     addr = addr.lower().strip()
+    if "@" not in addr or not addr.split("@", 1)[0] or not addr.split("@", 1)[1]:
+        return False
     return any(fnmatch.fnmatch(addr, p.lower()) for p in patterns)
