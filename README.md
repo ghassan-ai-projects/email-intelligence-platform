@@ -78,6 +78,22 @@ claude mcp add mailintel -- mailintel serve
 See [docs/agent-guide.md](docs/agent-guide.md) for the recommended MCP-agent
 operating loop, tool strategy, write-back behavior, and sending safety rules.
 
+### HTTP transport
+
+`mailintel serve` speaks stdio by default. For remote agents, the same tool
+surface is available over Streamable HTTP (the ALMS pattern):
+
+```sh
+mailintel serve --transport http          # 127.0.0.1:8765, endpoint /mcp
+```
+
+Bind address and port come from `[http]` in the config. Set
+`MAILINTEL_MCP_TOKEN` in `~/.mailintel/.env` to require a shared token sent as
+the `X-MAILINTEL-TOKEN` header; with no token the endpoint is unauthenticated
+dev mode. There is no in-process TLS or CORS — expose it beyond localhost only
+behind a reverse proxy. Audit logging, sending guardrails, and rate caps apply
+identically on both transports.
+
 ## Reactive agent loop, write-back and drafts
 
 Agents can react to changes instead of polling:
@@ -155,6 +171,9 @@ several defenses are built in ([security.py](src/mailintel/security.py)):
 - **Audit log** — every MCP tool call is recorded (tool, arguments, caller,
   timestamp, outcome) so you can answer "why did it send that email" after the
   fact.
+- **HTTP transport is fenced too** — the optional HTTP mode binds localhost by
+  default, requires a shared token once `MAILINTEL_MCP_TOKEN` is set, and
+  leaves TLS and stricter auth to a reverse proxy.
 
 ## Development
 

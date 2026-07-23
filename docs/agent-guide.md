@@ -25,6 +25,19 @@ The server uses the configured `~/.mailintel/config.toml` by default. Secrets
 belong in `~/.mailintel/.env` or another local environment file, not in the
 repository.
 
+For remote agent hosts, the same tool surface is available over Streamable
+HTTP instead of stdio:
+
+```sh
+mailintel serve --transport http          # binds [http] host/port, /mcp endpoint
+claude mcp add --transport http mailintel http://127.0.0.1:8765/mcp \
+  --header "X-MAILINTEL-TOKEN: $MAILINTEL_MCP_TOKEN"
+```
+
+Set `MAILINTEL_MCP_TOKEN` in `~/.mailintel/.env` to require the shared token;
+without it the endpoint is unauthenticated dev mode — keep it on localhost or
+behind a reverse proxy that terminates TLS and enforces access control.
+
 ## Operating loop
 
 Use an event cursor so the agent reacts to new work without rereading the whole

@@ -5,6 +5,16 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/) from its public release
 line.
 
+## [Unreleased]
+
+### Added
+
+- HTTP transport for the MCP server: `mailintel serve --transport http`
+  exposes the same tool surface over Streamable HTTP on `/mcp`, with
+  `[http]` config for host/port and an optional shared-token guard
+  (`X-MAILINTEL-TOKEN` header), following the ALMS pattern. stdio remains
+  the default.
+
 ## [0.1.0] - 2026-07-23
 
 Initial public release.

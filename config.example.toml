@@ -88,3 +88,14 @@ allowed_recipients = []               # e.g. ["*@mycompany.com", "partner@client
 attachment_dirs = []                  # e.g. ["~/Documents/outbox"]
 # Global cap on send_email/send_draft calls in the last hour. 0 = unlimited.
 max_sends_per_hour = 10
+
+[http]
+# HTTP transport for `mailintel serve --transport http` (stdio is the default).
+# Streamable HTTP on /mcp. Same model as ALMS: localhost by default, optional
+# shared token, TLS and harder auth are delegated to a reverse proxy.
+host = "127.0.0.1"                    # bind 0.0.0.0 only deliberately, behind a proxy
+port = 8765
+# Shared bearer-style token; clients send it as the X-MAILINTEL-TOKEN header.
+# The value lives in ~/.mailintel/.env (e.g. MAILINTEL_MCP_TOKEN=...), never here.
+# Unset = unauthenticated dev mode — trusted localhost only.
+auth_token_env = "MAILINTEL_MCP_TOKEN"

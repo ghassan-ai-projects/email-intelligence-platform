@@ -196,6 +196,24 @@ class EnrichConfig(BaseModel):
     stages: list[str] = ["attachments", "enrich", "embed"]
 
 
+class HttpConfig(BaseModel):
+    """HTTP transport for the MCP server (stdio remains the default).
+
+    Same model as the ALMS project: bind localhost by default, guard with an
+    optional shared token, and delegate TLS to a reverse proxy. With no token
+    configured the endpoint is unauthenticated — trusted localhost dev mode.
+    """
+
+    host: str = "127.0.0.1"  # bind 0.0.0.0 only deliberately, behind a proxy
+    # 8000/8001 are the FastMCP/ALMS defaults; 8765 avoids colliding with them.
+    port: int = 8765
+    auth_token_env: str = "MAILINTEL_MCP_TOKEN"
+
+    @property
+    def auth_token(self) -> str | None:
+        return os.environ.get(self.auth_token_env)
+
+
 class Config(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     maildir: MaildirConfig = Field(default_factory=MaildirConfig)
@@ -205,6 +223,7 @@ class Config(BaseModel):
     enrich: EnrichConfig = Field(default_factory=EnrichConfig)
     smtp: SmtpConfig = Field(default_factory=SmtpConfig)
     guardrail: GuardrailConfig = Field(default_factory=GuardrailConfig)
+    http: HttpConfig = Field(default_factory=HttpConfig)
 
 
 def config_path() -> Path:

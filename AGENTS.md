@@ -123,7 +123,7 @@ For substantial work, run `make ci-check`. For documentation-only work, run
 | `actions.py` | Agent write-back. |
 | `drafts.py` | Draft-first outgoing mail. |
 | `sender.py` | SMTP sending with guardrails and rate caps. |
-| `mcp_server.py` | MCP tool surface over stdio. |
+| `mcp_server.py` | MCP tool surface (stdio + Streamable HTTP transports). |
 | `cli.py` | Typer CLI. |
 
 Keep orchestration thin in `cli.py` and `mcp_server.py`. Put durable behavior in
@@ -140,6 +140,8 @@ module-level services that tests can call directly.
 - Do not weaken ingest sanitization, untrusted-content notices, audit logging,
   SMTP opt-in behavior, recipient allowlists, attachment directory allowlists, or
   send-rate caps.
+- Keep the MCP HTTP transport localhost-by-default with its shared-token guard;
+  do not bind it publicly without a token and a reverse proxy.
 - Keep secrets in `~/.mailintel/.env` or another local environment file, never
   in committed config.
 
