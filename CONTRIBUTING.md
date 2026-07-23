@@ -62,6 +62,11 @@ Use Conventional Commits:
 - `build:` for build tooling
 - `chore:` for maintenance
 
+## Conduct
+
+Participation in this project is covered by the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Agent Contributions
 
 Agent-authored changes are welcome, but the handoff must be reviewable:

@@ -181,3 +181,22 @@ and [`CONTRIBUTING.md`](CONTRIBUTING.md) for pull request expectations.
 Future work: OCR for scanned attachments, promotion of high-value facts into
 shared agent memory (ALMS), webhook-style forwarding of selected events, and
 multi-account sync on top of the existing `account` column.
+
+## Open Source Package
+
+- [MIT license](LICENSE)
+- [Changelog](CHANGELOG.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Support guide](SUPPORT.md)
+
+mailintel is released under the MIT license because it is simple, widely
+understood, commercially permissive, and a good fit for local-first
+infrastructure intended to be integrated into different agent stacks.
+
+## Status
+
+Current release: `0.1.0`. This is the initial public release. Expect schema
+migrations and MCP tool-surface adjustments between minor versions while the
+project hardens.

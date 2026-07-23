@@ -26,8 +26,8 @@ Preserve these product constraints:
 
 - `AGENTS.md` is the cross-agent source of truth for development work.
 - Codex reads `AGENTS.md` natively. Do not add `CODEX.md`.
-- `.github/copilot-instructions.md` must stay a thin bridge that points back
-  here.
+- `CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` must stay
+  thin bridges that point back here.
 - Durable repo rules belong here. Personal preferences do not.
 - Use `.agents/context/` for focused background that agents should load only
   when relevant.
