@@ -1080,6 +1080,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "sqlite-vec" },
     { name = "typer" },
+    { name = "uvicorn" },
     { name = "voyageai" },
     { name = "watchdog" },
 ]
@@ -1104,6 +1105,7 @@ requires-dist = [
     { name = "pypdf", specifier = ">=5.0" },
     { name = "sqlite-vec", specifier = ">=0.1.6" },
     { name = "typer", specifier = ">=0.12" },
+    { name = "uvicorn", specifier = ">=0.30" },
     { name = "voyageai", specifier = ">=0.3" },
     { name = "watchdog", specifier = ">=4.0" },
 ]

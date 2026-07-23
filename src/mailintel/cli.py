@@ -144,11 +144,17 @@ def enrich(
 
 
 @app.command()
-def serve() -> None:
-    """Run the MCP server on stdio."""
+def serve(
+    transport: str = typer.Option("stdio", help="MCP transport: stdio | http."),
+    host: str = typer.Option(None, help="HTTP bind host (default: [http] host in config)."),
+    port: int = typer.Option(None, help="HTTP bind port (default: [http] port in config)."),
+) -> None:
+    """Run the MCP server (stdio by default; --transport http for Streamable HTTP)."""
     from .mcp_server import main as serve_main
 
-    serve_main()
+    if transport not in ("stdio", "http"):
+        raise typer.BadParameter("transport must be 'stdio' or 'http'")
+    serve_main(transport=transport, host=host, port=port)
 
 
 @app.command()
