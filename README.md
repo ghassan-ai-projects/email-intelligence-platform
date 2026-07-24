@@ -1,5 +1,7 @@
 # Email Intelligence Platform (mailintel)
 
+> **Author:** [Ghassan Alhamoud](https://ghassan-alhamoud.com)
+
 Local-first email intelligence: your mail becomes a continuously enriched
 **knowledge base** that AI agents query through **MCP** — not a pile of messages
 behind a raw IMAP API.
