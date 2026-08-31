@@ -31,7 +31,7 @@ files are intentionally excluded.
 | Assessed (no change) | 45 | `src/mailintel/security.py` |
 | Assessed (no change) | 33 | `src/mailintel/sync.py` |
 | Assessed (no change) | 23 | `src/mailintel/guardrail/__init__.py` |
-| Pending | 3 | `src/mailintel/__init__.py` |
+| Assessed (no change) | 3 | `src/mailintel/__init__.py` |
 | Pending | 0 | `src/mailintel/enrich/__init__.py` |
 
 The scanner slice also introduced these focused production modules; they are
