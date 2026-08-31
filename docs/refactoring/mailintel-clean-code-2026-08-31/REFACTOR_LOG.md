@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 4 baseline files plus 23 focused modules
-- Candidate reviews received: 4
-- Production commits: 4
+- Completed files: 5 baseline files plus 24 focused modules
+- Candidate reviews received: 5
+- Production commits: 4 (CLI slice pending commit)
 - Tests run: 0 (intentional)
 
 ## File records
@@ -121,3 +121,28 @@ result, and any deferred behavior or feature notes.
 - Commit: `608b313` (`refactor: separate mailintel schema scripts`).
 - Bar result: PASS. No schema version, migration, connection,
   contact-import, or metadata behavior changed.
+
+## `src/mailintel/cli.py` — candidate, implementation, review
+
+- Baseline: 296 lines; the file combined Typer command registration, setup
+  scaffolding, sync/enrichment flows, watch-loop behavior, search, and store
+  maintenance commands.
+- Candidate reviewer: delegated read-only review selected the configuration
+  template and `init` implementation as the only cohesive extraction needed for
+  the 250-line bar. It required preserving command names/options, output text,
+  lazy imports, connection closure, watch timing, and exit behavior.
+- Implementation: moved setup scaffolding into `cli_setup.py`, leaving
+  `cli.py` as a 247-line command facade. `CONFIG_TEMPLATE`, `config_path`, and
+  `DEFAULT_CONFIG_DIR` remain available and are passed through the wrapper so
+  historical import and monkeypatch seams still work.
+- Review findings and fixes: the first review found that two setup symbols were
+  no longer exposed and the template export was inert for monkeypatching. The
+  wrapper and helper were changed to pass the current facade bindings. The
+  follow-up review found no remaining issues; command registration, options,
+  defaults, output, and timing remained unchanged.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  CLI modules, Python bytecode compilation passed, the configuration template
+  compared equal to baseline, and `git diff --check` passed. Tests were not run
+  by design.
+- Bar result: PASS pending commit. No command, configuration-path, output,
+  exit-code, connection-lifecycle, or subprocess behavior changed.

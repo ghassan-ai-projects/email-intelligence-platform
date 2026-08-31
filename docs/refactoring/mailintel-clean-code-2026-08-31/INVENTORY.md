@@ -9,7 +9,7 @@ files are intentionally excluded.
 | Complete | 183 | `src/mailintel/mcp_server.py` |
 | Complete | 202 | `src/mailintel/ingest.py` |
 | Complete | 115 | `src/mailintel/db.py` |
-| Pending | 296 | `src/mailintel/cli.py` |
+| Complete | 247 | `src/mailintel/cli.py` |
 | Pending | 287 | `src/mailintel/enrich/pipeline.py` |
 | Pending | 251 | `src/mailintel/search.py` |
 | Pending | 248 | `src/mailintel/config.py` |
@@ -79,6 +79,12 @@ The database slice also introduced this focused production module:
 | Status | Lines | File |
 |---|---:|---|
 | Complete | 222 | `src/mailintel/db_schema.py` |
+
+The CLI slice also introduced this focused production module:
+
+| Status | Lines | File |
+|---|---:|---|
+| Complete | 72 | `src/mailintel/cli_setup.py` |
 
 The line count is a prioritization signal, not a permission to split without a
 cohesive responsibility boundary.

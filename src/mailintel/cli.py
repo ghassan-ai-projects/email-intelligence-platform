@@ -8,7 +8,11 @@ import time
 import typer
 
 from . import db
+from .cli_setup import CONFIG_TEMPLATE as _config_template
+from .cli_setup import initialize_config
 from .config import DEFAULT_CONFIG_DIR, Config, config_path, load_config
+
+CONFIG_TEMPLATE = _config_template
 
 app = typer.Typer(
     name="mailintel",
@@ -16,42 +20,6 @@ app = typer.Typer(
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
-
-CONFIG_TEMPLATE = """\
-# mailintel configuration. Secrets stay in ~/.mailintel/.env (auto-loaded):
-#   EMAIL_USER / EMAIL_PASSWORD, DEEPSEEK_API_KEY, VOYAGE_API_KEY, ...
-# See config.example.toml in the repo for every option (Ollama embeddings,
-# SMTP sending with guardrails, GMX folder names, ...).
-
-[storage]
-db_path = "{db_path}"
-
-[maildir]
-path = "~/Mail"                     # or set MAILINTEL_MAILDIR
-sent_folders = ["Sent", "Sent Mail", "Sent Messages", "Sent Items", "Gesendet"]
-exclude_folders = ["Trash", "Spam", "Junk", "Drafts", "Papierkorb", "Entwürfe"]
-
-[sync]
-command = "mbsync -a"
-interval_minutes = 5
-
-[llm]
-provider = "openai-compat"          # or "anthropic"
-base_url = "https://api.deepseek.com"
-model = "deepseek-chat"
-api_key_env = "DEEPSEEK_API_KEY"
-
-[embeddings]
-provider = "voyage"                 # or "openai-compat" (e.g. local Ollama)
-model = "voyage-3.5-lite"
-api_key_env = "VOYAGE_API_KEY"
-dimensions = 1024
-
-[smtp]
-enabled = false                     # opt-in: allows the send_email MCP tool
-host = ""
-allowed_recipients = []             # guardrail, e.g. ["*@mycompany.com"]
-"""
 
 
 def _cfg() -> Config:
@@ -65,24 +33,7 @@ def _echo_json(data: object) -> None:
 @app.command()
 def init() -> None:
     """Create ~/.mailintel/config.toml and print setup guidance."""
-    path = config_path()
-    if path.exists():
-        typer.echo(f"Config already exists: {path}")
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(CONFIG_TEMPLATE.format(db_path=str(DEFAULT_CONFIG_DIR / "mail.db")))
-        typer.echo(f"Wrote {path}")
-    typer.echo(
-        "\nNext steps:\n"
-        "  1. Install mbsync:        brew install isync\n"
-        "  2. Configure ~/.mbsyncrc  (see docs/mbsync-setup.md in the repo)\n"
-        "  3. Edit the [maildir] path in the config to your mbsync target\n"
-        "     (or set the MAILINTEL_MAILDIR environment variable)\n"
-        "  4. Put secrets in ~/.mailintel/.env — EMAIL_USER, EMAIL_PASSWORD,\n"
-        "     DEEPSEEK_API_KEY (or your provider), VOYAGE_API_KEY\n"
-        "  5. Run:                   mailintel sync && mailintel enrich\n"
-        "  6. Register MCP server:   claude mcp add mailintel -- mailintel serve"
-    )
+    initialize_config(config_path(), DEFAULT_CONFIG_DIR, CONFIG_TEMPLATE)
 
 
 @app.command()
