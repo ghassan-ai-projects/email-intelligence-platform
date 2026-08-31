@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 4 assessed baseline files
+- Completed files: 7 refactored baseline files plus 5 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 11
+- Candidate reviews received: 12
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -267,3 +267,23 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Tier validation consistency or
   other contact policy changes require a separate security review.
+
+## `src/mailintel/drafts.py` — candidate, implementation, review
+
+- Baseline: 199 lines; the file is a cohesive draft lifecycle covering
+  serialization, sanitized CRUD, transaction ownership, atomic send claiming,
+  sender guardrails, and sent-state events.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting CRUD from sending would fragment the draft state machine and risk
+  its safety/monkeypatch seams without a size-limit need.
+- Implementation: no production code change. Recipient and attachment JSON
+  handling, sanitization, status transitions, commits, sender delegation,
+  rollback, event payloads, and public MCP-facing functions remain unchanged.
+- Review findings: no actionable findings. Draft-first behavior, attachment
+  fences, allowlists, rate-cap delegation, and module-level compatibility seams
+  were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Stronger recipient normalization,
+  status transition modeling, or an outbox would require a separate safety and
+  transaction design.
