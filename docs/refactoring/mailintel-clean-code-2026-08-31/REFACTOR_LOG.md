@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 2 baseline files plus 18 focused modules
-- Candidate reviews received: 2
-- Production commits: 1 (MCP slice pending commit)
+- Completed files: 3 baseline files plus 22 focused modules
+- Candidate reviews received: 3
+- Production commits: 2 (ingest slice pending commit)
 - Tests run: 0 (intentional)
 
 ## File records
@@ -68,3 +68,31 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS pending commit. MCP audit logging, untrusted-content notices,
   draft-first sending, SMTP delegation, token middleware, and public facade
   compatibility remain intact.
+
+## `src/mailintel/ingest.py` — candidate, implementation, review
+
+- Baseline: 442 lines; the file combined RFC822 parsing, Maildir discovery,
+  SQLite projections, incremental synchronization, cleanup, events, guardrail
+  scanning, and thread maintenance.
+- Candidate reviewer: delegated read-only review identified four cohesive
+  boundaries: parser, Maildir helpers, relational/FTS/enrichment projections,
+  and cleanup/thread maintenance. It called out preserving traversal order,
+  duplicate-copy mapping, deletion order, guardrail failure isolation, and the
+  final transaction commit.
+- Implementation: extracted `ingest_parser.py`, `ingest_maildir.py`,
+  `ingest_storage.py`, and `ingest_cleanup.py`; left `ingest.py` as a 202-line
+  orchestration facade with explicit historical aliases. Every extracted
+  module is below 250 lines, and public steps read as ingestion operations.
+- Review findings and fixes: the first review identified missing historical
+  parser/storage/threading exports, an added assertion that changed an
+  impossible-DB error type, and a skipped empty-thread refresh call. The
+  follow-up identified that legacy private names were importable but not used
+  as internal patch points. All findings were fixed; the facade now dispatches
+  through the compatibility aliases and preserves the baseline call/order
+  boundaries.
+- Checks before commit: Ruff check and formatting passed, mypy passed for all
+  five ingestion source files, Python bytecode compilation passed, and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS pending commit. Maildir sanitization, duplicate mapping,
+  guardrail isolation, audit/event behavior, enrichment job filtering, and
+  schema usage remain unchanged.

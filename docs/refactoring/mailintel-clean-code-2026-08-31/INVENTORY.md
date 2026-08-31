@@ -7,7 +7,7 @@ files are intentionally excluded.
 |---|---:|---|
 | Complete | 208 | `src/mailintel/guardrail/scanner.py` |
 | Complete | 183 | `src/mailintel/mcp_server.py` |
-| Pending | 442 | `src/mailintel/ingest.py` |
+| Complete | 202 | `src/mailintel/ingest.py` |
 | Pending | 334 | `src/mailintel/db.py` |
 | Pending | 296 | `src/mailintel/cli.py` |
 | Pending | 287 | `src/mailintel/enrich/pipeline.py` |
@@ -63,6 +63,16 @@ are covered by the MCP server record and are all below the 250-line limit:
 | Complete | 68 | `src/mailintel/mcp_tools/http.py` |
 | Complete | 45 | `src/mailintel/mcp_tools/mail.py` |
 | Complete | 1 | `src/mailintel/mcp_tools/__init__.py` |
+
+The ingestion slice also introduced these focused production modules; they are
+covered by the ingestion record and are all below the 250-line limit:
+
+| Status | Lines | File |
+|---|---:|---|
+| Complete | 146 | `src/mailintel/ingest_parser.py` |
+| Complete | 118 | `src/mailintel/ingest_storage.py` |
+| Complete | 71 | `src/mailintel/ingest_cleanup.py` |
+| Complete | 47 | `src/mailintel/ingest_maildir.py` |
 
 The line count is a prioritization signal, not a permission to split without a
 cohesive responsibility boundary.
