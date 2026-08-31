@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 14 assessed baseline files
+- Completed files: 7 refactored baseline files plus 15 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 21
+- Candidate reviews received: 22
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -454,3 +454,21 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS (assessed, no code change). Delimiters/escaping, attachment
   budgets, stable SQL ordering, and prompt versioning require a separate model
   and security design.
+
+## `src/mailintel/guardrail/db.py` — candidate, implementation, review
+
+- Baseline: 69 lines; the file is a cohesive guardrail persistence/migration
+  boundary covering idempotent schema safety-net work and result projection
+  writes, both with deliberate commit ownership.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting migration and result storage would add transaction/import risk with
+  no meaningful maintenance benefit.
+- Implementation: no production code change. Table probes, ordered/defaulted
+  column additions, contacts DDL, partial-schema behavior, result SQL,
+  serialization, blocked conversion, and commits remain unchanged.
+- Review findings: no actionable findings. Guardrail tests, ingest, database
+  schema v4, and MCP detail consumers were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Partial contacts repair and
+  warning-payload encoding require a separate migration/data design.
