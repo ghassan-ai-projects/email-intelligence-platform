@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 5 assessed baseline files
+- Completed files: 7 refactored baseline files plus 6 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 12
+- Candidate reviews received: 13
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -287,3 +287,22 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS (assessed, no code change). Stronger recipient normalization,
   status transition modeling, or an outbox would require a separate safety and
   transaction design.
+
+## `src/mailintel/sender.py` — candidate, implementation, review
+
+- Baseline: 192 lines; the file is a cohesive guarded send transaction from
+  rate and recipient/path checks through MIME construction, SMTP execution,
+  account/event persistence, and response shaping.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting validation, message construction, and send persistence would risk
+  guardrail ordering and patch seams without a size-limit need.
+- Implementation: no production code change. SMTP opt-in, rate caps,
+  recipient allowlists, attachment fences, reply headers, error text, event
+  payloads, commit timing, and public symbols remain unchanged.
+- Review findings: no actionable findings. MCP mail and draft send consumers,
+  security boundaries, and module-level seams were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Stronger address normalization,
+  timeout/config hardening, attachment caps, or an outbox require a separate
+  security and delivery design.
