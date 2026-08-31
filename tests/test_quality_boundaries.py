@@ -9,16 +9,15 @@ import sqlite3
 import pytest
 
 from mailintel import actions, drafts, ingest as ingest_mod
-from mailintel.config import Config, EnrichConfig, GuardrailConfig
+from mailintel.config import EnrichConfig, GuardrailConfig
 from mailintel.enrich.attachments import load_attachment
-from mailintel.enrich.enrichment_storage import persist_enrichment
 from mailintel.enrich.pipeline import run_embed_stage, run_pipeline, store_enrichment
 from mailintel.events import emit, get_events_since
 from mailintel.guardrail.contacts import ContactsDB
 from mailintel.ingest import ingest
 from mailintel.models import ActionItem, EnrichmentResult, Entities
 from mailintel.search import search_emails
-from tests.conftest import make_email, write_message
+from tests.conftest import write_message
 
 
 def test_invalid_new_contact_tier_is_rejected(conn):

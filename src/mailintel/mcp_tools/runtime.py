@@ -215,14 +215,6 @@ def get_config() -> Config:
     return _config
 
 
-def get_conn() -> sqlite3.Connection:
-    """Open one SQLite connection for a tool invocation."""
-    current = _invocation_connection.get()
-    if current is not None:
-        return current
-    return db.connect(get_config().storage.db_path)
-
-
 @contextmanager
 def invocation_connection():
     """Provide one connection for tool work and its audit record."""

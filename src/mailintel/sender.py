@@ -212,7 +212,7 @@ def send_email(
             attached.append(path.name)
 
     reservation_id = _reserve_send_slot(conn, cfg)
-    refused: dict[str, tuple[int, bytes | str]] = {}
+    refused: dict[str, tuple[int, bytes]] = {}
     delivery_attempted = False
     try:
         with smtplib.SMTP(smtp.host, smtp.port, timeout=60) as server:
