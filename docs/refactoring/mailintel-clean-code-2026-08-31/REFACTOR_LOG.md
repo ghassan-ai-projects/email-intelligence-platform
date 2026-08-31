@@ -9,7 +9,7 @@ and bar check. Tests remain deferred until the final gate.
 - Baseline: `75d2247`
 - Completed files: 4 baseline files plus 23 focused modules
 - Candidate reviews received: 4
-- Production commits: 3 (database slice pending commit)
+- Production commits: 4
 - Tests run: 0 (intentional)
 
 ## File records
@@ -118,5 +118,6 @@ result, and any deferred behavior or feature notes.
   database modules, Python bytecode compilation passed, the four SQL literals
   compared equal to baseline, and `git diff --check` passed. Tests were not run
   by design.
-- Bar result: PASS pending commit. No schema version, migration, connection,
+- Commit: `608b313` (`refactor: separate mailintel schema scripts`).
+- Bar result: PASS. No schema version, migration, connection,
   contact-import, or metadata behavior changed.
