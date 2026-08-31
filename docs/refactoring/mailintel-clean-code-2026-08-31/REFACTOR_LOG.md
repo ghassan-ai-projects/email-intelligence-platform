@@ -9,7 +9,7 @@ and bar check. Tests remain deferred until the final gate.
 - Baseline: `75d2247`
 - Completed files: 6 baseline files plus 25 focused modules
 - Candidate reviews received: 6
-- Production commits: 5 (pipeline slice pending commit)
+- Production commits: 6
 - Tests run: 0 (intentional)
 
 ## File records
@@ -168,6 +168,7 @@ result, and any deferred behavior or feature notes.
 - Checks before commit: Ruff check and formatting passed, mypy passed for both
   pipeline modules, Python bytecode compilation passed, and `git diff --check`
   passed. Tests were not run by design.
-- Bar result: PASS pending commit. Queue claims/retries, provider and embedder
+- Commit: `2dd453a` (`refactor: separate enrichment persistence`).
+- Bar result: PASS. Queue claims/retries, provider and embedder
   boundaries, persistence projections, event emission, and stage ordering are
   unchanged.
