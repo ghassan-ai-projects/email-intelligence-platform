@@ -24,7 +24,7 @@ files are intentionally excluded.
 | Assessed (no change) | 107 | `src/mailintel/actions.py` |
 | Assessed (no change) | 104 | `src/mailintel/threading_.py` |
 | Assessed (no change) | 104 | `src/mailintel/events.py` |
-| Pending | 93 | `src/mailintel/enrich/llm.py` |
+| Assessed (no change) | 93 | `src/mailintel/enrich/llm.py` |
 | Pending | 78 | `src/mailintel/enrich/prompts.py` |
 | Pending | 69 | `src/mailintel/guardrail/db.py` |
 | Pending | 68 | `src/mailintel/models.py` |

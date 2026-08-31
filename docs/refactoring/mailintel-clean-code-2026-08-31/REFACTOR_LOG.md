@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 12 assessed baseline files
+- Completed files: 7 refactored baseline files plus 13 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 19
+- Candidate reviews received: 20
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -418,3 +418,21 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS (assessed, no code change). Event schema/versioning,
   concurrent pagination, and payload redaction/size policy require a separate
   design.
+
+## `src/mailintel/enrich/llm.py` — candidate, implementation, review
+
+- Baseline: 93 lines; the file is a cohesive LLM boundary covering the provider
+  protocol, response parsing/error type, two lazy-loaded providers, and factory.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting parser/providers would add import and monkeypatch risk without a
+  size-limit need.
+- Implementation: no production code change. JSON fence/prose fallback,
+  errors, lazy SDK imports, API-key messages, provider request payloads,
+  response filtering, factory selection, and public symbols remain unchanged.
+- Review findings: no actionable findings. Pipeline consumers and enrichment
+  parser/provider tests were checked; sanitization remains outside this
+  transport boundary.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Structured validation,
+  retry/backoff, timeout policy, and provider registry require separate design.
