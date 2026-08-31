@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 7 assessed baseline files
+- Completed files: 7 refactored baseline files plus 8 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 14
+- Candidate reviews received: 15
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -325,3 +325,22 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). A provider registry, vector
   validation, retry policy, or metadata migration needs a separate design.
+
+## `src/mailintel/enrich/attachments.py` — candidate, implementation, review
+
+- Baseline: 114 lines; the file is a cohesive attachment boundary for Maildir
+  lookup, message/attachment loading, PDF/text extraction, and pipeline text
+  persistence.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting lookup, extraction, and persistence would fragment shared path and
+  parser behavior without a size-limit need.
+- Implementation: no production code change. Lazy PDF loading, page/text
+  limits, failure handling, path fallback, MIME/extension behavior, raw stored
+  payloads, sanitization boundary, NULL-only updates, and no-commit behavior
+  remain unchanged.
+- Review findings: no actionable findings. Pipeline, sender, and MCP details
+  consumers plus the separate local attachment allowlist fence were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Extending pipeline extraction to
+  non-PDF text attachments is a separate behavior decision.
