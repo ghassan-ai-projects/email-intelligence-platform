@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 3 baseline files plus 22 focused modules
-- Candidate reviews received: 3
-- Production commits: 3
+- Completed files: 4 baseline files plus 23 focused modules
+- Candidate reviews received: 4
+- Production commits: 3 (database slice pending commit)
 - Tests run: 0 (intentional)
 
 ## File records
@@ -99,3 +99,24 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS. Maildir sanitization, duplicate mapping,
   guardrail isolation, audit/event behavior, enrichment job filtering, and
   schema usage remain unchanged.
+
+## `src/mailintel/db.py` — candidate, implementation, review
+
+- Baseline: 334 lines; the file combined four versioned schema scripts,
+  connection setup, migrations, contact import, and metadata accessors.
+- Candidate reviewer: delegated read-only review selected the schema scripts as
+  the only required cohesive extraction for the 250-line bar. It required
+  preserving the SQL byte-for-byte, migration order, sqlite-vec loading,
+  transaction ownership, and all public/private names.
+- Implementation: moved `_SCHEMA`, `_SCHEMA_V2`, `_SCHEMA_V3`, and `_SCHEMA_V4`
+  into `db_schema.py`, retaining explicit re-exports from `db.py`. The facade
+  is now 115 lines; the schema module is 222 lines.
+- Review findings: no actionable findings. Static review confirmed exact SQL
+  equality, preserved connection pragmas and extension lifecycle, unchanged
+  migration order and commit semantics, and unchanged contact/meta behavior.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  database modules, Python bytecode compilation passed, the four SQL literals
+  compared equal to baseline, and `git diff --check` passed. Tests were not run
+  by design.
+- Bar result: PASS pending commit. No schema version, migration, connection,
+  contact-import, or metadata behavior changed.
