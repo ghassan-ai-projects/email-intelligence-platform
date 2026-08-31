@@ -175,3 +175,21 @@ def test_partial_smtp_refusal_marks_draft_unknown_without_retry(conn, cfg, monke
     assert conn.execute("SELECT status FROM drafts").fetchone()[0] == "unknown"
     assert conn.execute("SELECT COUNT(*) FROM events WHERE type = 'email_sent'").fetchone()[0] == 0
     assert conn.execute("SELECT status FROM send_rate_slots").fetchone()[0] == "reserved"
+
+
+def test_smtp_failure_after_delivery_attempt_is_not_retryable(conn, cfg, monkeypatch):
+    cfg.smtp.enabled = True
+    cfg.smtp.host = "smtp.example.com"
+    cfg.smtp.max_sends_per_hour = 5
+    monkeypatch.setenv("EMAIL_USER", "me@example.com")
+    monkeypatch.setenv("EMAIL_PASSWORD", "pw")
+
+    class FailingSMTP(_RefusingSMTP):
+        def send_message(self, _message):
+            raise OSError("connection dropped after DATA")
+
+    monkeypatch.setattr("smtplib.SMTP", FailingSMTP)
+    with pytest.raises(SendOutcomeUnknown, match="outcome is unknown"):
+        send_email(conn, cfg, ["a@example.com"], "subject", "body")
+
+    assert conn.execute("SELECT status FROM send_rate_slots").fetchone()[0] == "reserved"

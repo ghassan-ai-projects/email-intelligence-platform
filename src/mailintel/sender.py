@@ -109,14 +109,14 @@ def _validated_recipients(raw: list[str], allowed: list[str]) -> list[str]:
             continue
         addrs.append(address)
     if invalid:
-        raise SendError(f"Invalid recipient addresses: {', '.join(invalid)}")
+        raise SendError(f"Invalid recipient addresses ({len(invalid)} invalid)")
     if not addrs:
         raise SendError("No valid recipient addresses given")
     for addr in addrs:
         if not recipient_allowed(addr, allowed):
             raise SendError(
-                f"Recipient '{addr}' is not covered by smtp.allowed_recipients — "
-                f"refusing to send (guardrail against injected exfiltration)"
+                "A recipient is not covered by smtp.allowed_recipients — "
+                "refusing to send (guardrail against injected exfiltration)"
             )
     return addrs
 
@@ -213,13 +213,20 @@ def send_email(
 
     reservation_id = _reserve_send_slot(conn, cfg)
     refused: dict[str, tuple[int, bytes | str]] = {}
+    delivery_attempted = False
     try:
         with smtplib.SMTP(smtp.host, smtp.port, timeout=60) as server:
             if smtp.starttls:
                 server.starttls()
             server.login(username, password)
+            delivery_attempted = True
             refused = server.send_message(msg) or {}
     except Exception as exc:
+        if delivery_attempted:
+            raise SendOutcomeUnknown(
+                "SMTP delivery was attempted but the outcome is unknown; "
+                "do not retry automatically"
+            ) from exc
         _release_send_slot(conn, reservation_id, str(exc))
         raise
 
