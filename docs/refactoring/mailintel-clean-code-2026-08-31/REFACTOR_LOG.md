@@ -9,7 +9,7 @@ and bar check. Tests remain deferred until the final gate.
 - Baseline: `75d2247`
 - Completed files: 7 baseline files plus 26 focused modules
 - Candidate reviews received: 7
-- Production commits: 6 (search slice pending commit)
+- Production commits: 7
 - Tests run: 0 (intentional)
 
 ## File records
@@ -189,6 +189,7 @@ result, and any deferred behavior or feature notes.
 - Checks before commit: Ruff check and formatting passed, mypy passed for both
   search modules, Python bytecode compilation passed, public signature/export
   checks passed, and `git diff --check` passed. Tests were not run by design.
-- Bar result: PASS pending commit. Search result shapes, sanitization,
+- Commit: `3770576` (`refactor: separate search store statistics`).
+- Bar result: PASS. Search result shapes, sanitization,
   guardrail exposure, query limits, SQL ordering, and stats output remain
   unchanged.
