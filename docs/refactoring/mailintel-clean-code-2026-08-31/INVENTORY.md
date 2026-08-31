@@ -6,7 +6,7 @@ files are intentionally excluded.
 | Status | Lines | File |
 |---|---:|---|
 | Complete | 208 | `src/mailintel/guardrail/scanner.py` |
-| Pending | 878 | `src/mailintel/mcp_server.py` |
+| Complete | 183 | `src/mailintel/mcp_server.py` |
 | Pending | 442 | `src/mailintel/ingest.py` |
 | Pending | 334 | `src/mailintel/db.py` |
 | Pending | 296 | `src/mailintel/cli.py` |
@@ -49,6 +49,20 @@ covered by the scanner record and are all below the 250-line limit:
 | Complete | 46 | `src/mailintel/guardrail/detectors/size.py` |
 | Complete | 30 | `src/mailintel/guardrail/detectors/base.py` |
 | Complete | 24 | `src/mailintel/guardrail/detectors/__init__.py` |
+
+The MCP server slice also introduced these focused production modules; they
+are covered by the MCP server record and are all below the 250-line limit:
+
+| Status | Lines | File |
+|---|---:|---|
+| Complete | 140 | `src/mailintel/mcp_tools/knowledge.py` |
+| Complete | 131 | `src/mailintel/mcp_tools/drafts.py` |
+| Complete | 116 | `src/mailintel/mcp_tools/details.py` |
+| Complete | 112 | `src/mailintel/mcp_tools/search.py` |
+| Complete | 91 | `src/mailintel/mcp_tools/agent_loop.py` |
+| Complete | 68 | `src/mailintel/mcp_tools/http.py` |
+| Complete | 45 | `src/mailintel/mcp_tools/mail.py` |
+| Complete | 1 | `src/mailintel/mcp_tools/__init__.py` |
 
 The line count is a prioritization signal, not a permission to split without a
 cohesive responsibility boundary.
