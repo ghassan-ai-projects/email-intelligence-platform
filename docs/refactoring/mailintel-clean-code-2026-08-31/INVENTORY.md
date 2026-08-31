@@ -22,7 +22,7 @@ files are intentionally excluded.
 | Assessed (no change) | 114 | `src/mailintel/enrich/attachments.py` |
 | Assessed (no change) | 109 | `src/mailintel/guardrail/scanner_wrapper.py` |
 | Assessed (no change) | 107 | `src/mailintel/actions.py` |
-| Pending | 104 | `src/mailintel/threading_.py` |
+| Assessed (no change) | 104 | `src/mailintel/threading_.py` |
 | Pending | 104 | `src/mailintel/events.py` |
 | Pending | 93 | `src/mailintel/enrich/llm.py` |
 | Pending | 78 | `src/mailintel/enrich/prompts.py` |

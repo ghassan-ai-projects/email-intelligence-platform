@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 10 assessed baseline files
+- Completed files: 7 refactored baseline files plus 11 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 17
+- Candidate reviews received: 18
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -380,3 +380,22 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Tag limits, action transitions,
   and idempotent event semantics require a separate write-back design.
+
+## `src/mailintel/threading_.py` — candidate, implementation, review
+
+- Baseline: 104 lines; the file is a cohesive threading boundary for subject
+  normalization/reply detection, reference/child/fallback assignment, thread
+  merging, and statistics refresh.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  The operations share ingestion's transaction and splitting would add coupling
+  without a size-limit need.
+- Implementation: no production code change. Regex normalization, 60-day
+  fallback, reference and child lookups, minimum-ID merge rule, SQL cleanup,
+  account defaults, no-commit behavior, and refresh semantics remain unchanged.
+- Review findings: no actionable findings. Ingest storage/cleanup consumers,
+  public symbols, private patch points, and unordered-set refresh behavior were
+  explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Account-scoped matching or
+  merging requires a separate schema/behavior decision.
