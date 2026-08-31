@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 3 assessed baseline files
+- Completed files: 7 refactored baseline files plus 4 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 10
+- Candidate reviews received: 11
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -248,3 +248,22 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS (assessed, no code change). Query builders, typed result
   schemas, pagination, or deterministic ordering need a separate contract
   decision.
+
+## `src/mailintel/guardrail/contacts.py` — candidate, implementation, review
+
+- Baseline: 203 lines; the file is one cohesive `ContactsDB` domain object with
+  shared address normalization, value objects, lookup/list reads, mutations,
+  interaction writes, commits, and JSON import.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting methods would fragment transaction ownership and the public contact
+  API without approaching the size limit.
+- Implementation: no production code change. Normalization, ordering, tier
+  validation, defaults, commit boundaries, interaction sequence, import count,
+  and public exports remain unchanged.
+- Review findings: no actionable findings for this refactor. The candidate
+  explicitly preserved the current asymmetry where invalid tiers are validated
+  for existing contacts but not new rows.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Tier validation consistency or
+  other contact policy changes require a separate security review.

@@ -15,7 +15,7 @@ files are intentionally excluded.
 | Assessed (no change) | 248 | `src/mailintel/config.py` |
 | Assessed (no change) | 221 | `src/mailintel/guardrail/threat_profiles.py` |
 | Assessed (no change) | 213 | `src/mailintel/knowledge.py` |
-| Pending | 203 | `src/mailintel/guardrail/contacts.py` |
+| Assessed (no change) | 203 | `src/mailintel/guardrail/contacts.py` |
 | Pending | 199 | `src/mailintel/drafts.py` |
 | Pending | 192 | `src/mailintel/sender.py` |
 | Pending | 152 | `src/mailintel/enrich/embeddings.py` |
