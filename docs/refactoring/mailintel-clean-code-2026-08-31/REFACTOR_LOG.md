@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 15 assessed baseline files
+- Completed files: 7 refactored baseline files plus 16 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 22
+- Candidate reviews received: 23
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -472,3 +472,20 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Partial contacts repair and
   warning-payload encoding require a separate migration/data design.
+
+## `src/mailintel/models.py` — candidate, implementation, review
+
+- Baseline: 68 lines; the file is a cohesive structured-enrichment contract of
+  constants and four nested Pydantic/domain models.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting models would fragment shared validation and serialization imports
+  without a size or ownership need.
+- Implementation: no production code change. Field names/types/defaults,
+  default factories, coercion, category/sentiment normalization, confidence and
+  importance clamps, fallback behavior, and public imports remain unchanged.
+- Review findings: no actionable findings. Pipeline/storage consumers and
+  serialized result shapes were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Stricter literals/date fields or
+  model configuration require a separate compatibility decision.
