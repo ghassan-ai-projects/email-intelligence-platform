@@ -23,6 +23,7 @@ from .embeddings import (
     make_embedder,
     store_embeddings,
 )
+from .enrichment_storage import persist_enrichment
 from .llm import LLMProvider, make_provider
 from .prompts import ENRICH_SYSTEM, build_enrich_prompt
 
@@ -83,99 +84,8 @@ def _pending_jobs(
 
 
 def store_enrichment(conn: sqlite3.Connection, email_id: int, result: EnrichmentResult) -> None:
-    account_row = conn.execute("SELECT account FROM emails WHERE id = ?", (email_id,)).fetchone()
-    account = account_row["account"] if account_row else "default"
-
-    conn.execute(
-        "UPDATE emails SET language = ?, summary = ?, importance = ?, sentiment = ?, "
-        "enriched_at = ? WHERE id = ?",
-        (
-            result.language,
-            sanitize_text(result.summary),
-            result.importance,
-            result.sentiment,
-            _now(),
-            email_id,
-        ),
-    )
-    # Re-enrichment replaces previous knowledge rows for the email.
-    conn.execute("DELETE FROM action_items WHERE email_id = ?", (email_id,))
-    conn.execute("DELETE FROM facts WHERE email_id = ?", (email_id,))
-    conn.execute("DELETE FROM email_entities WHERE email_id = ?", (email_id,))
-
-    for item in result.action_items:
-        description = sanitize_text(item.description)
-        cur = conn.execute(
-            "INSERT INTO action_items (email_id, description, owner, due_date, account) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (email_id, description, item.owner, item.due_date, account),
-        )
-        emit(
-            conn,
-            "action_item_created",
-            email_id,
-            {
-                "action_item_id": cur.lastrowid,
-                "description": description,
-                "owner": item.owner,
-                "due_date": item.due_date,
-            },
-            account=account,
-        )
-    for fact in result.facts:
-        fact_text = sanitize_text(fact.fact)
-        cur = conn.execute(
-            "INSERT INTO facts (email_id, fact, category, due_date, confidence, account) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (email_id, fact_text, fact.category, fact.due_date, fact.confidence, account),
-        )
-        emit(
-            conn,
-            "fact_extracted",
-            email_id,
-            {
-                "fact_id": cur.lastrowid,
-                "fact": fact_text,
-                "category": fact.category,
-                "due_date": fact.due_date,
-            },
-            account=account,
-        )
-    emit(
-        conn,
-        "email_enriched",
-        email_id,
-        {
-            "importance": result.importance,
-            "sentiment": result.sentiment,
-            "summary": sanitize_text(result.summary),
-            "language": result.language,
-        },
-        account=account,
-    )
-    entity_lists = [
-        ("person", result.entities.people),
-        ("company", result.entities.companies),
-        ("project", result.entities.projects),
-        ("topic", result.entities.topics),
-    ]
-    for etype, names in entity_lists:
-        for name in names:
-            name = name.strip()
-            if not name:
-                continue
-            norm = name.lower()
-            conn.execute(
-                "INSERT OR IGNORE INTO entities (type, name, name_norm) VALUES (?, ?, ?)",
-                (etype, name, norm),
-            )
-            entity_id = conn.execute(
-                "SELECT id FROM entities WHERE type = ? AND name_norm = ?", (etype, norm)
-            ).fetchone()["id"]
-            conn.execute(
-                "INSERT OR IGNORE INTO email_entities (email_id, entity_id) VALUES (?, ?)",
-                (email_id, entity_id),
-            )
+    """Replace one email's knowledge projections using the pipeline clock."""
+    persist_enrichment(conn, email_id, result, _now, emit, sanitize_text)
 
 
 def run_attachments_stage(conn: sqlite3.Connection, cfg: Config, limit: int) -> tuple[int, int]:

@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 5 baseline files plus 24 focused modules
-- Candidate reviews received: 5
-- Production commits: 5
+- Completed files: 6 baseline files plus 25 focused modules
+- Candidate reviews received: 6
+- Production commits: 5 (pipeline slice pending commit)
 - Tests run: 0 (intentional)
 
 ## File records
@@ -147,3 +147,27 @@ result, and any deferred behavior or feature notes.
 - Commit: `44f5a96` (`refactor: separate mailintel CLI setup`).
 - Bar result: PASS. No command, configuration-path, output,
   exit-code, connection-lifecycle, or subprocess behavior changed.
+
+## `src/mailintel/enrich/pipeline.py` — candidate, implementation, review
+
+- Baseline: 287 lines; the file combined queue state transitions, enrichment
+  persistence, three stage runners, and stage-order orchestration.
+- Candidate reviewer: delegated read-only review proposed the queue helpers as
+  one possible extraction and required preserving claims, stale recovery,
+  retries, commits, provider boundaries, stage order, and compatibility seams.
+- Implementation: extracted the enrichment persistence projection and event
+  writer into `enrich/enrichment_storage.py`, leaving queue state and stage
+  runners together. `pipeline.py` is now 197 lines and the storage module is
+  115 lines. A three-argument `store_enrichment` wrapper remains in the facade.
+- Review findings and fixes: the first review found that moving persistence
+  would hide the historical `pipeline.emit` and `pipeline.sanitize_text`
+  bindings. The wrapper now passes those live facade callbacks, along with the
+  facade `_now`, into the extracted function. The follow-up found no remaining
+  issues; SQL, sanitization, event, timestamp, stage, and commit ordering are
+  preserved.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  pipeline modules, Python bytecode compilation passed, and `git diff --check`
+  passed. Tests were not run by design.
+- Bar result: PASS pending commit. Queue claims/retries, provider and embedder
+  boundaries, persistence projections, event emission, and stage ordering are
+  unchanged.
