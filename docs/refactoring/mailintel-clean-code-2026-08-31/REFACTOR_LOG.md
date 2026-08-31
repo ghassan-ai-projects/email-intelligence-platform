@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 8 assessed baseline files
+- Completed files: 7 refactored baseline files plus 9 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 15
+- Candidate reviews received: 16
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -344,3 +344,21 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Extending pipeline extraction to
   non-PDF text attachments is a separate behavior decision.
+
+## `src/mailintel/guardrail/scanner_wrapper.py` — candidate, implementation, review
+
+- Baseline: 109 lines; the file is a cohesive adapter boundary for the cached
+  scanner, typed result conversion/timing, parsed entry point, and config-object
+  adaptation.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting the adapter would risk cache, timing, and import/patch seams without
+  a line-limit need.
+- Implementation: no production code change. Scanner re-exports, result fields
+  and mapping, cache rebuild behavior, lazy initialization, header defaults,
+  timing, config flattening, and public entry points remain unchanged.
+- Review findings: no actionable findings. Guardrail package, ingest, and MCP
+  draft consumers were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Cache concurrency/invalidation,
+  typed config parameters, and error telemetry require a separate design.
