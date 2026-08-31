@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 2 assessed baseline files
+- Completed files: 7 refactored baseline files plus 3 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 9
+- Candidate reviews received: 10
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -229,3 +229,22 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Any typed profile model,
   compilation cache, or external profile format belongs in a separate design.
+
+## `src/mailintel/knowledge.py` — candidate, implementation, review
+
+- Baseline: 213 lines; the file is a cohesive knowledge/read model for action
+  items, facts, decisions, sender summaries, waiting replies, and daily
+  summaries.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting by query would fragment the public knowledge API without
+  approaching the size limit.
+- Implementation: no production code change. Existing wildcard escaping,
+  limits, SQL predicates/order, date calculations, source context, result
+  shapes, and public symbols remain unchanged.
+- Review findings: no actionable findings. MCP consumers, untrusted-content
+  boundaries, and private helper compatibility were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Query builders, typed result
+  schemas, pagination, or deterministic ordering need a separate contract
+  decision.
