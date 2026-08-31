@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 17 assessed baseline files
+- Completed files: 7 refactored baseline files plus 18 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 24
+- Candidate reviews received: 25
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -507,3 +507,20 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). RFC parsing, pattern
   normalization, or empty-allowlist changes require a separate security review.
+
+## `src/mailintel/sync.py` — candidate, implementation, review
+
+- Baseline: 33 lines; the file is a cohesive external-command adapter with one
+  error type and one subprocess operation.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting command validation/execution would add no useful boundary.
+- Implementation: no production code change. Tokenization, empty-command and
+  executable checks, list-based non-shell subprocess execution, timeout,
+  stderr/stdout truncation, error text/chaining, and public imports remain
+  unchanged.
+- Review findings: no actionable findings. CLI, watch, MCP knowledge, and test
+  consumers were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Structured command config,
+  explicit environment/cwd, cancellation, or retries require separate design.
