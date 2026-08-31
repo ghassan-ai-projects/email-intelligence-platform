@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 16 assessed baseline files
+- Completed files: 7 refactored baseline files plus 17 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 23
+- Candidate reviews received: 24
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -489,3 +489,21 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Stricter literals/date fields or
   model configuration require a separate compatibility decision.
+
+## `src/mailintel/security.py` — candidate, implementation, review
+
+- Baseline: 45 lines; the file is a cohesive security boundary for the
+  untrusted-content notice, invisible/control-character sanitization, and
+  recipient allowlist predicate.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting these policies would scatter security behavior and increase import
+  and patch risk.
+- Implementation: no production code change. Strip ranges, tab/newline
+  preservation, `None` handling, notice text, empty-pattern behavior, address
+  validation, and case-insensitive wildcard matching remain unchanged.
+- Review findings: no actionable findings. Ingest, attachments, enrichment,
+  drafts/actions, sender, and MCP details consumers were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). RFC parsing, pattern
+  normalization, or empty-allowlist changes require a separate security review.
