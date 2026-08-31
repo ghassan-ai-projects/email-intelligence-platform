@@ -9,7 +9,7 @@ and bar check. Tests remain deferred until the final gate.
 - Baseline: `75d2247`
 - Completed files: 5 baseline files plus 24 focused modules
 - Candidate reviews received: 5
-- Production commits: 4 (CLI slice pending commit)
+- Production commits: 5
 - Tests run: 0 (intentional)
 
 ## File records
@@ -144,5 +144,6 @@ result, and any deferred behavior or feature notes.
   CLI modules, Python bytecode compilation passed, the configuration template
   compared equal to baseline, and `git diff --check` passed. Tests were not run
   by design.
-- Bar result: PASS pending commit. No command, configuration-path, output,
+- Commit: `44f5a96` (`refactor: separate mailintel CLI setup`).
+- Bar result: PASS. No command, configuration-path, output,
   exit-code, connection-lifecycle, or subprocess behavior changed.
