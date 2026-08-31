@@ -11,7 +11,7 @@ files are intentionally excluded.
 | Complete | 115 | `src/mailintel/db.py` |
 | Complete | 247 | `src/mailintel/cli.py` |
 | Complete | 197 | `src/mailintel/enrich/pipeline.py` |
-| Pending | 251 | `src/mailintel/search.py` |
+| Complete | 223 | `src/mailintel/search.py` |
 | Pending | 248 | `src/mailintel/config.py` |
 | Pending | 221 | `src/mailintel/guardrail/threat_profiles.py` |
 | Pending | 213 | `src/mailintel/knowledge.py` |
@@ -91,6 +91,12 @@ The enrichment pipeline slice also introduced this focused production module:
 | Status | Lines | File |
 |---|---:|---|
 | Complete | 115 | `src/mailintel/enrich/enrichment_storage.py` |
+
+The search slice also introduced this focused production module:
+
+| Status | Lines | File |
+|---|---:|---|
+| Complete | 40 | `src/mailintel/store_stats.py` |
 
 The line count is a prioritization signal, not a permission to split without a
 cohesive responsibility boundary.

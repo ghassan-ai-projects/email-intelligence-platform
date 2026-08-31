@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 6 baseline files plus 25 focused modules
-- Candidate reviews received: 6
-- Production commits: 6
+- Completed files: 7 baseline files plus 26 focused modules
+- Candidate reviews received: 7
+- Production commits: 6 (search slice pending commit)
 - Tests run: 0 (intentional)
 
 ## File records
@@ -171,4 +171,24 @@ result, and any deferred behavior or feature notes.
 - Commit: `2dd453a` (`refactor: separate enrichment persistence`).
 - Bar result: PASS. Queue claims/retries, provider and embedder
   boundaries, persistence projections, event emission, and stage ordering are
+  unchanged.
+
+## `src/mailintel/search.py` — candidate, implementation, review
+
+- Baseline: 251 lines; the file combined FTS/filter search, email and thread
+  details, thread search, and store statistics.
+- Candidate reviewer: delegated read-only review selected `get_stats` as a
+  cohesive store-metrics boundary, requiring its query order, result shape,
+  public export, and all search/detail query behavior to remain unchanged.
+- Implementation: moved `get_stats` into `store_stats.py` and re-exported the
+  same callable from `search.py`. The facade is now 223 lines and the new
+  metrics module is 40 lines.
+- Review findings: no actionable findings. Static review confirmed exact stats
+  queries, ordering, result shape, limits, FTS/LIKE/date/tag handling,
+  guardrail warning parsing, and the `_like_escape` patch point.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  search modules, Python bytecode compilation passed, public signature/export
+  checks passed, and `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS pending commit. Search result shapes, sanitization,
+  guardrail exposure, query limits, SQL ordering, and stats output remain
   unchanged.
