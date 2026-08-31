@@ -22,11 +22,18 @@ def complete_action_item(conn: sqlite3.Connection, action_item_id: int, done: bo
     if not row:
         return {"error": f"action item {action_item_id} not found"}
     status = "done" if done else "open"
-    conn.execute(
-        "UPDATE action_items SET status = ?, completed_at = ? WHERE id = ?",
-        (status, _now() if done else None, action_item_id),
-    )
     if done:
+        updated = conn.execute(
+            "UPDATE action_items SET status = 'done', completed_at = ? "
+            "WHERE id = ? AND status != 'done'",
+            (_now(), action_item_id),
+        )
+    else:
+        updated = conn.execute(
+            "UPDATE action_items SET status = 'open', completed_at = NULL WHERE id = ?",
+            (action_item_id,),
+        )
+    if done and updated.rowcount == 1:
         emit(
             conn,
             "action_item_completed",

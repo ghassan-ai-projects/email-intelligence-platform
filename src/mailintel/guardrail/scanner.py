@@ -148,7 +148,7 @@ class EmailScanner:
             if detector_result.triggered:
                 scores.append(detector_result.risk_score)
                 warnings.extend(detector_result.details)
-            if getattr(detector, "truncated", False):
+            if detector_result.truncated:
                 truncated = True
         return scores, warnings, truncated
 
@@ -190,11 +190,11 @@ class EmailScanner:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         entry = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "sender": sender,
-            "subject": subject[:60],
+            "sender_present": bool(sender),
+            "subject_length": len(subject),
             "score": result.risk_score,
             "blocked": result.blocked,
-            "warnings": result.warnings[:3],
+            "warning_count": len(result.warnings),
         }
         try:
             with log_path.open("a", encoding="utf-8") as log_file:

@@ -9,6 +9,7 @@ import pytest
 from mailintel import mcp_server
 from mailintel.config import load_config, load_env_files
 from mailintel.ingest import ingest
+from mailintel.mcp_tools import runtime
 from mailintel.security import UNTRUSTED_NOTICE, recipient_allowed, sanitize_text
 from mailintel.sender import SendError, send_email
 from tests.conftest import make_email, write_message
@@ -149,14 +150,30 @@ def test_send_happy_path_with_forwarded_attachment(conn, cfg, monkeypatch):
 
 
 def test_mcp_read_attachment_and_notices(conn, cfg, monkeypatch, maildir):
+    text_message = EmailMessage()
+    text_message["Message-ID"] = "<txtatt@example.com>"
+    text_message["Subject"] = "Notes attached"
+    text_message["From"] = "Alice <alice@example.com>"
+    text_message["To"] = "Me <me@example.com>"
+    text_message["Date"] = "Thu, 05 Jun 2025 10:00:00 +0000"
+    text_message.set_content("See notes.")
+    text_message.add_attachment(
+        b"plain text attachment", maintype="text", subtype="plain", filename="notes.txt"
+    )
     write_message(
         maildir,
         "6000.txtatt.host:2,",
-        make_email("<txtatt@example.com>", "Notes attached", body="See notes."),
+        text_message.as_bytes(),
     )
-    # Add a text attachment variant via raw message manipulation
     ingest(conn, cfg)
-    monkeypatch.setattr(mcp_server, "_config", cfg)
+    monkeypatch.setattr(runtime, "_config", cfg)
+
+    text_email_row = conn.execute(
+        "SELECT id FROM emails WHERE message_id = '<txtatt@example.com>'"
+    ).fetchone()
+    text_detail = mcp_server.get_email(text_email_row["id"])
+    text_attachment = mcp_server.read_attachment(text_detail["attachments"][0]["id"])
+    assert text_attachment["text"] == "plain text attachment"
 
     email_row = conn.execute(
         "SELECT id FROM emails WHERE message_id = '<m4@example.com>'"
@@ -176,6 +193,6 @@ def test_mcp_read_attachment_and_notices(conn, cfg, monkeypatch, maildir):
 
 
 def test_mcp_send_email_surfaces_guardrail_errors(conn, cfg, monkeypatch):
-    monkeypatch.setattr(mcp_server, "_config", cfg)
+    monkeypatch.setattr(runtime, "_config", cfg)
     result = mcp_server.send_email(["a@b.com"], "hi", "body")
     assert "disabled" in result["error"]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..mcp_server import _audit_tool, get_config, get_conn, mcp
+from .runtime import _audit_tool, get_config, invocation_connection, mcp
 
 
 @mcp.tool()
@@ -26,20 +26,18 @@ def send_email(
     from ..sender import SendError, send_email as do_send  # noqa: I001
 
     cfg = get_config()
-    conn = get_conn()
-    try:
-        return do_send(
-            conn,
-            cfg,
-            to,
-            subject,
-            body,
-            cc,
-            attachment_ids,
-            attachment_paths,
-            in_reply_to_email_id,
-        )
-    except SendError as exc:
-        return {"error": str(exc)}
-    finally:
-        conn.close()
+    with invocation_connection() as conn:
+        try:
+            return do_send(
+                conn,
+                cfg,
+                to,
+                subject,
+                body,
+                cc,
+                attachment_ids,
+                attachment_paths,
+                in_reply_to_email_id,
+            )
+        except SendError as exc:
+            return {"error": str(exc)}

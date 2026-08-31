@@ -26,8 +26,7 @@ from .embeddings import (
 from .enrichment_storage import persist_enrichment
 from .llm import LLMProvider, make_provider
 from .prompts import ENRICH_SYSTEM, build_enrich_prompt
-
-STAGE_ORDER = ["attachments", "enrich", "embed"]
+from .stages import STAGE_ORDER
 
 
 @dataclass
@@ -62,7 +61,11 @@ def _reset_stale_running(conn: sqlite3.Connection, max_age_seconds: int = 3600) 
 
 
 def _claim_job(conn: sqlite3.Connection, job_id: int) -> bool:
-    """Atomically claim a pending/failed job for processing."""
+    """Atomically mark a pending/failed job as running.
+
+    The caller commits immediately after claiming so this helper does not
+    commit unrelated work on a caller-owned connection.
+    """
     cur = conn.execute(
         "UPDATE pipeline_jobs SET status = 'running', updated_at = ? "
         "WHERE id = ? AND status IN ('pending', 'failed')",
@@ -90,10 +93,12 @@ def store_enrichment(conn: sqlite3.Connection, email_id: int, result: Enrichment
 
 def run_attachments_stage(conn: sqlite3.Connection, cfg: Config, limit: int) -> tuple[int, int]:
     _reset_stale_running(conn)
+    conn.commit()
     done = failed = 0
     for job in _pending_jobs(conn, "attachments", cfg.enrich.max_attempts, limit):
         if not _claim_job(conn, job["job_id"]):
             continue
+        conn.commit()
         try:
             extract_email_attachments(conn, job["id"], cfg.maildir.path)
             _mark(conn, job["job_id"], "done")
@@ -109,6 +114,7 @@ def run_enrich_stage(
     conn: sqlite3.Connection, cfg: Config, limit: int, provider: LLMProvider | None = None
 ) -> tuple[int, int]:
     _reset_stale_running(conn)
+    conn.commit()
     jobs = _pending_jobs(conn, "enrich", cfg.enrich.max_attempts, limit)
     if not jobs:
         return 0, 0
@@ -117,6 +123,7 @@ def run_enrich_stage(
     for job in jobs:
         if not _claim_job(conn, job["job_id"]):
             continue
+        conn.commit()
         try:
             prompt = build_enrich_prompt(conn, job, cfg.llm)
             raw = provider.complete_json(ENRICH_SYSTEM, prompt)
@@ -135,6 +142,7 @@ def run_embed_stage(
     conn: sqlite3.Connection, cfg: Config, limit: int, embedder: Embedder | None = None
 ) -> tuple[int, int]:
     _reset_stale_running(conn)
+    conn.commit()
     # Only embed after enrichment so the summary is part of the vector; emails
     # whose enrich job terminally failed still get embedded (body-only).
     jobs = conn.execute(
@@ -142,7 +150,8 @@ def run_embed_stage(
         "JOIN emails e ON e.id = j.email_id "
         "WHERE j.stage = 'embed' AND j.status IN ('pending', 'failed') AND j.attempts < ? "
         "AND NOT EXISTS (SELECT 1 FROM pipeline_jobs j2 WHERE j2.email_id = j.email_id "
-        "  AND j2.stage = 'enrich' AND j2.status IN ('pending', 'failed') AND j2.attempts < ?) "
+        "  AND j2.stage = 'enrich' AND j2.status IN ('pending', 'failed', 'running') "
+        "  AND j2.attempts < ?) "
         "ORDER BY e.date_utc DESC LIMIT ?",
         (cfg.enrich.max_attempts, cfg.enrich.max_attempts, limit),
     ).fetchall()
@@ -158,6 +167,7 @@ def run_embed_stage(
         claimed = [j for j in batch if _claim_job(conn, j["job_id"])]
         if not claimed:
             continue
+        conn.commit()
         texts = [embedding_input(j, cfg.embeddings.max_chars) for j in claimed]
         try:
             vectors = embedder.embed_documents(texts)
@@ -180,6 +190,13 @@ def run_pipeline(
     provider: LLMProvider | None = None,
     embedder: Embedder | None = None,
 ) -> PipelineStats:
+    if conn.in_transaction:
+        raise RuntimeError(
+            "run_pipeline requires a clean connection; commit or rollback caller changes first"
+        )
+    unknown_stages = sorted(set(cfg.enrich.stages) - set(STAGE_ORDER))
+    if unknown_stages:
+        raise ValueError(f"unknown enrichment stage(s): {', '.join(unknown_stages)}")
     stats = PipelineStats()
     runners = {
         "attachments": lambda: run_attachments_stage(conn, cfg, limit),

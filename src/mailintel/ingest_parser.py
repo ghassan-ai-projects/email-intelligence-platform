@@ -98,7 +98,7 @@ def _parse_date(msg: EmailMessage, path: Path) -> str:
 def _addresses(msg: EmailMessage, header: str) -> list[tuple[str, str]]:
     addresses = []
     for name, address in email.utils.getaddresses([msg.get(header, "")]):
-        if address:
+        if address and "@" in address and not any(char.isspace() for char in address):
             addresses.append((address.lower(), name))
     return addresses
 

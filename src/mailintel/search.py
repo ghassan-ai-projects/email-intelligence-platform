@@ -45,7 +45,9 @@ def email_row_brief(row: sqlite3.Row, extra: dict | None = None) -> dict:
         d["summary"] = row["summary"]
     if "importance" in keys and row["importance"] is not None:
         d["importance"] = row["importance"]
-    # Guardrail scan info (present after v4 migration).
+    # Guardrail scan info (present after the guardrail migrations).
+    if "guardrail_status" in keys and row["guardrail_status"] != "not_scanned":
+        d["guardrail_status"] = row["guardrail_status"]
     if "guardrail_score" in keys and row["guardrail_score"]:
         d["guardrail_score"] = row["guardrail_score"]
         d["guardrail_blocked"] = bool(row["guardrail_blocked"])
@@ -75,8 +77,11 @@ def search_emails(
     params: list[Any] = []
 
     if query:
+        sanitized_query = fts_query(query)
+        if not sanitized_query:
+            return []
         where.append("e.id IN (SELECT rowid FROM emails_fts WHERE emails_fts MATCH ?)")
-        params.append(fts_query(query))
+        params.append(sanitized_query)
     if from_addr:
         escaped = _like_escape(from_addr)
         where.append("(e.from_addr LIKE ? ESCAPE '\\' OR e.from_name LIKE ? ESCAPE '\\')")
@@ -204,11 +209,14 @@ def get_thread(conn: sqlite3.Connection, thread_id: int) -> dict | None:
 
 
 def search_threads(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[dict]:
+    sanitized_query = fts_query(query)
+    if not sanitized_query:
+        return []
     rows = conn.execute(
         "SELECT e.thread_id, COUNT(*) AS hits FROM emails e "
         "WHERE e.id IN (SELECT rowid FROM emails_fts WHERE emails_fts MATCH ?) "
         "GROUP BY e.thread_id ORDER BY hits DESC, MAX(e.date_utc) DESC LIMIT ?",
-        (fts_query(query), max(1, min(limit, 50))),
+        (sanitized_query, max(1, min(limit, 50))),
     ).fetchall()
     out = []
     for r in rows:

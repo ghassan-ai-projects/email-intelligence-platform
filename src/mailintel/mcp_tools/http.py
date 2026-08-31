@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ..config import Config
-from ..mcp_server import get_config, mcp
+from .runtime import get_config, mcp
 
 ASGIApp = Callable[[dict, Callable, Callable], Awaitable[None]]
 AUTH_HEADER = b"x-mailintel-token"
@@ -60,9 +60,11 @@ def run_http(host: str | None = None, port: int | None = None) -> None:
     bind_host = host or cfg.http.host
     bind_port = port or cfg.http.port
     if not cfg.http.auth_token:
-        note = "no auth token configured (dev mode — trusted localhost only)"
         if bind_host not in ("127.0.0.1", "localhost", "::1"):
-            note = f"WARNING: {note}, but binding to {bind_host}"
-        print(f"mailintel MCP HTTP: {note}", file=sys.stderr)
+            raise RuntimeError(
+                "Refusing unauthenticated MCP HTTP binding outside localhost; "
+                "set MAILINTEL_MCP_TOKEN before using a public bind host"
+            )
+        print("mailintel MCP HTTP: no auth token configured (trusted localhost only)", file=sys.stderr)
     app: Any = build_http_app(cfg)
     uvicorn.run(app, host=bind_host, port=bind_port, timeout_keep_alive=60)

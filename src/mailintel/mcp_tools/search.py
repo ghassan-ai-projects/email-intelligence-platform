@@ -7,7 +7,7 @@ import struct
 
 from .. import search
 from ..enrich.embeddings import embedding_input, knn_email_ids, make_embedder
-from ..mcp_server import _audit_tool, get_config, get_conn, mcp
+from .runtime import _audit_tool, get_config, invocation_connection, mcp
 
 
 @mcp.tool()
@@ -30,8 +30,7 @@ def search_emails(
     from_addr/to_addr substring-match addresses and names; tag filters
     to emails tagged via tag_email.
     """
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return search.search_emails(
             conn,
             query,
@@ -45,8 +44,6 @@ def search_emails(
             tag,
             limit,
         )
-    finally:
-        conn.close()
 
 
 @mcp.tool()
@@ -58,8 +55,7 @@ def semantic_search(query: str, limit: int = 10) -> list[dict]:
     where keyword search would miss synonyms. Requires embeddings to be built.
     """
     cfg = get_config()
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         embedder = make_embedder(cfg.embeddings)
         hits = knn_email_ids(conn, embedder.embed_query(query), max(1, min(limit, 50)))
         results = []
@@ -68,8 +64,6 @@ def semantic_search(query: str, limit: int = 10) -> list[dict]:
             if row:
                 results.append(search.email_row_brief(row, {"distance": round(distance, 4)}))
         return results
-    finally:
-        conn.close()
 
 
 @mcp.tool()
@@ -77,8 +71,7 @@ def semantic_search(query: str, limit: int = 10) -> list[dict]:
 def related_emails(email_id: int, limit: int = 10) -> list[dict]:
     """Find emails most similar to a given email (by embedding distance)."""
     cfg = get_config()
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
         if not row:
             return []
@@ -95,8 +88,6 @@ def related_emails(email_id: int, limit: int = 10) -> list[dict]:
             if result_row:
                 results.append(search.email_row_brief(result_row, {"distance": round(distance, 4)}))
         return results[:limit]
-    finally:
-        conn.close()
 
 
 def _load_stored_embedding(conn: sqlite3.Connection, email_id: int) -> list[float] | None:

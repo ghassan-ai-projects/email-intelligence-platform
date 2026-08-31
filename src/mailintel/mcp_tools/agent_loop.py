@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .. import actions
-from ..mcp_server import _audit_tool, get_conn, mcp
+from .runtime import _audit_tool, invocation_connection, mcp
 
 
 @mcp.tool()
@@ -18,74 +18,53 @@ def get_events_since(cursor: int = 0, types: list[str] | None = None, limit: int
     """
     from ..events import get_events_since as fetch
 
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return fetch(conn, cursor, types, limit)
-    finally:
-        conn.close()
 
 
 @mcp.tool()
 @_audit_tool
 def complete_action_item(action_item_id: int, done: bool = True) -> dict:
     """Mark an action item done (or reopen it with done=false)."""
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return actions.complete_action_item(conn, action_item_id, done)
-    finally:
-        conn.close()
 
 
 @mcp.tool()
 @_audit_tool
 def set_importance(email_id: int, importance: int) -> dict:
     """Override an email's importance (1=bulk ... 5=urgent)."""
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return actions.set_importance(conn, email_id, importance)
-    finally:
-        conn.close()
 
 
 @mcp.tool()
 @_audit_tool
 def tag_email(email_id: int, tag: str) -> dict:
     """Add a lowercase tag to an email (e.g. 'triaged', 'invoice', 'project-x')."""
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return actions.tag_email(conn, email_id, tag)
-    finally:
-        conn.close()
 
 
 @mcp.tool()
 @_audit_tool
 def untag_email(email_id: int, tag: str) -> dict:
     """Remove a tag from an email."""
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return actions.untag_email(conn, email_id, tag)
-    finally:
-        conn.close()
 
 
 @mcp.tool()
 @_audit_tool
 def list_tags() -> list[dict]:
     """All tags in use, with email counts."""
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return actions.list_tags(conn)
-    finally:
-        conn.close()
 
 
 @mcp.tool()
 @_audit_tool
 def add_email_note(email_id: int, note: str) -> dict:
     """Append a timestamped agent note to an email (shown in get_email)."""
-    conn = get_conn()
-    try:
+    with invocation_connection() as conn:
         return actions.add_note(conn, email_id, note)
-    finally:
-        conn.close()

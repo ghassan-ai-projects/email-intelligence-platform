@@ -21,31 +21,61 @@ def persist_enrichment(
     """Replace one email's knowledge projections and emit their events."""
     account_row = conn.execute("SELECT account FROM emails WHERE id = ?", (email_id,)).fetchone()
     account = account_row["account"] if account_row else "default"
+    clean = lambda value: sanitize_value(value) if value is not None else None
+    language = sanitize_value(result.language)
+    sentiment = sanitize_value(result.sentiment)
 
     conn.execute(
         "UPDATE emails SET language = ?, summary = ?, importance = ?, sentiment = ?, "
         "enriched_at = ? WHERE id = ?",
         (
-            result.language,
+            language,
             sanitize_value(result.summary),
             result.importance,
-            result.sentiment,
+            sentiment,
             now(),
             email_id,
         ),
     )
-    # Re-enrichment replaces previous knowledge rows for the email.
-    conn.execute("DELETE FROM action_items WHERE email_id = ?", (email_id,))
+    existing_actions = conn.execute(
+        "SELECT id, description, owner, due_date, status, completed_at "
+        "FROM action_items WHERE email_id = ? ORDER BY id",
+        (email_id,),
+    ).fetchall()
     conn.execute("DELETE FROM facts WHERE email_id = ?", (email_id,))
     conn.execute("DELETE FROM email_entities WHERE email_id = ?", (email_id,))
 
+    retained_action_ids: list[int] = []
     for item in result.action_items:
         description = sanitize_value(item.description)
+        owner = clean(item.owner)
+        due_date = clean(item.due_date)
+        match = next(
+            (
+                row
+                for row in existing_actions
+                if row["id"] not in retained_action_ids
+                and row["description"] == description
+                and row["owner"] == owner
+                and row["due_date"] == due_date
+            ),
+            None,
+        )
+        if match:
+            retained_action_ids.append(match["id"])
+            conn.execute(
+                "UPDATE action_items SET description = ?, owner = ?, due_date = ? WHERE id = ?",
+                (description, owner, due_date, match["id"]),
+            )
+            continue
         cur = conn.execute(
             "INSERT INTO action_items (email_id, description, owner, due_date, account) "
             "VALUES (?, ?, ?, ?, ?)",
-            (email_id, description, item.owner, item.due_date, account),
+            (email_id, description, owner, due_date, account),
         )
+        if cur.lastrowid is None:
+            raise RuntimeError("failed to insert action item")
+        retained_action_ids.append(cur.lastrowid)
         emit_event(
             conn,
             "action_item_created",
@@ -53,17 +83,28 @@ def persist_enrichment(
             {
                 "action_item_id": cur.lastrowid,
                 "description": description,
-                "owner": item.owner,
-                "due_date": item.due_date,
+                "owner": owner,
+                "due_date": due_date,
             },
             account=account,
         )
+    if retained_action_ids:
+        placeholders = ", ".join("?" for _ in retained_action_ids)
+        conn.execute(
+            f"DELETE FROM action_items WHERE email_id = ? AND id NOT IN ({placeholders})",
+            (email_id, *retained_action_ids),
+        )
+    else:
+        conn.execute("DELETE FROM action_items WHERE email_id = ?", (email_id,))
+
     for fact in result.facts:
         fact_text = sanitize_value(fact.fact)
+        category = sanitize_value(fact.category)
+        due_date = clean(fact.due_date)
         cur = conn.execute(
             "INSERT INTO facts (email_id, fact, category, due_date, confidence, account) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (email_id, fact_text, fact.category, fact.due_date, fact.confidence, account),
+            (email_id, fact_text, category, due_date, fact.confidence, account),
         )
         emit_event(
             conn,
@@ -72,8 +113,8 @@ def persist_enrichment(
             {
                 "fact_id": cur.lastrowid,
                 "fact": fact_text,
-                "category": fact.category,
-                "due_date": fact.due_date,
+                "category": category,
+                "due_date": due_date,
             },
             account=account,
         )
@@ -83,9 +124,9 @@ def persist_enrichment(
         email_id,
         {
             "importance": result.importance,
-            "sentiment": result.sentiment,
+            "sentiment": sentiment,
             "summary": sanitize_value(result.summary),
-            "language": result.language,
+            "language": language,
         },
         account=account,
     )
@@ -97,7 +138,7 @@ def persist_enrichment(
     ]
     for entity_type, names in entity_lists:
         for name in names:
-            name = name.strip()
+            name = sanitize_value(name).strip()
             if not name:
                 continue
             normalized_name = name.lower()

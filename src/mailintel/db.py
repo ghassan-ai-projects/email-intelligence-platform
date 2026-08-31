@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
-from datetime import UTC, datetime
+from contextlib import contextmanager
 from pathlib import Path
+from collections.abc import Iterator
 
 import sqlite_vec
 
-from .db_schema import _SCHEMA, _SCHEMA_V2, _SCHEMA_V3, _SCHEMA_V4
+from .db_schema import _SCHEMA, _SCHEMA_V2, _SCHEMA_V3, _SCHEMA_V4, _SCHEMA_V5, _SCHEMA_V6
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 
 def connect(db_path: Path | str) -> sqlite3.Connection:
@@ -29,61 +29,26 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     return conn
 
 
+@contextmanager
+def connection(db_path: Path | str) -> Iterator[sqlite3.Connection]:
+    """Open and close a database connection for one application operation."""
+    conn = connect(db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def import_contacts_json(conn: sqlite3.Connection, path: Path | str | None = None) -> int:
     """Import contacts from a JSON file into the contacts table.
 
     Defaults to ~/.mailintel/contacts.json. Returns the number of contacts
     inserted or updated. Malformed files or entries are skipped.
     """
-    if path is None:
-        path = Path.home() / ".mailintel" / "contacts.json"
-    path = Path(path)
-    if not path.exists():
-        return 0
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return 0
-    if not isinstance(data, dict):
-        return 0
-    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-    count = 0
-    for entry in data.get("contacts", []):
-        if not isinstance(entry, dict):
-            continue
-        addr = str(entry.get("addr", "")).lower().strip()
-        if not addr:
-            continue
-        existing = conn.execute("SELECT id FROM contacts WHERE addr = ?", (addr,)).fetchone()
-        if existing:
-            updates: list[str] = []
-            params: list[str] = []
-            for field in ("tier", "name", "notes"):
-                val = entry.get(field)
-                if val:
-                    updates.append(f"{field} = ?")
-                    params.append(str(val))
-            if updates:
-                updates.append("updated_at = ?")
-                params.append(now)
-                params.append(str(existing["id"]))
-                conn.execute(f"UPDATE contacts SET {', '.join(updates)} WHERE id = ?", params)
-        else:
-            conn.execute(
-                "INSERT OR IGNORE INTO contacts (addr, name, tier, notes, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    addr,
-                    str(entry.get("name", "")),
-                    str(entry.get("tier", "unknown")),
-                    str(entry.get("notes", "")),
-                    now,
-                    now,
-                ),
-            )
-        count += 1
-    conn.commit()
-    return count
+    from .guardrail.contacts import ContactsDB
+
+    default_path = Path.home() / ".mailintel" / "contacts.json"
+    return ContactsDB(conn).import_json(path or default_path)
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -98,6 +63,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.executescript(_SCHEMA_V3)
     if version < 4:
         conn.executescript(_SCHEMA_V4)
+    if version < 5:
+        conn.executescript(_SCHEMA_V5)
+    if version < 6:
+        conn.executescript(_SCHEMA_V6)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 

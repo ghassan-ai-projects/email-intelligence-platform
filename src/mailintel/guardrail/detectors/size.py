@@ -17,7 +17,6 @@ class SizeGuardDetector(BaseDetector):
         self.max_bytes = config.get("max_bytes", self.DEFAULT_MAX_BYTES)
         self.max_chars = config.get("max_chars", self.DEFAULT_MAX_CHARS)
         self.truncation_length = config.get("truncation_length", self.DEFAULT_TRUNCATION_LENGTH)
-        self.truncated = False
 
     @property
     def name(self) -> str:
@@ -29,7 +28,6 @@ class SizeGuardDetector(BaseDetector):
         byte_length = len(body.encode("utf-8"))
         char_length = len(body)
         if byte_length <= self.max_bytes and char_length <= self.max_chars:
-            self.truncated = False
             return DetectorResult()
 
         max_ratio = max(
@@ -37,10 +35,9 @@ class SizeGuardDetector(BaseDetector):
             char_length / self.max_chars if char_length > self.max_chars else 1.0,
         )
         score = max(10, min(100, int((max_ratio - 1.0) * 50)))
-        self.truncated = True
         details = [
             f"Email size: {byte_length:,} bytes / {char_length:,} chars — "
             f"limit: {self.max_bytes:,} bytes / {self.max_chars:,} chars. "
             f"Would truncate to {self.truncation_length:,} chars."
         ]
-        return DetectorResult(risk_score=score, triggered=True, details=details)
+        return DetectorResult(risk_score=score, triggered=True, truncated=True, details=details)

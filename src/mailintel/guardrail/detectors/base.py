@@ -12,6 +12,7 @@ class DetectorResult:
 
     risk_score: int = 0
     triggered: bool = False
+    truncated: bool = False
     details: list[str] = field(default_factory=list)
 
 

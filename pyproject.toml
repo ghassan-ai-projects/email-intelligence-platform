@@ -81,7 +81,7 @@ addopts = [
     "--strict-markers",
     "--cov=mailintel",
     "--cov-report=term-missing",
-    "--cov-fail-under=75",
+    "--cov-fail-under=90",
 ]
 testpaths = ["tests"]
 xfail_strict = true

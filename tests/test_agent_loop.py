@@ -5,11 +5,12 @@ from __future__ import annotations
 from email.message import EmailMessage
 
 from mailintel import actions, drafts, mcp_server
+from mailintel.mcp_tools import runtime
 from mailintel.enrich.pipeline import run_pipeline
 from mailintel.events import get_events_since
 from mailintel.ingest import ingest
 from mailintel.search import get_email, search_emails
-from tests.test_enrich import FakeEmbedder, FakeProvider
+from tests.fakes import FakeEmbedder, FakeProvider
 
 
 def _setup(conn, cfg):
@@ -217,7 +218,7 @@ def test_send_draft_happy_path(conn, cfg, monkeypatch):
 
 def test_mcp_agent_loop_tools(conn, cfg, monkeypatch):
     _setup(conn, cfg)
-    monkeypatch.setattr(mcp_server, "_config", cfg)
+    monkeypatch.setattr(runtime, "_config", cfg)
 
     feed = mcp_server.get_events_since(cursor=0, limit=10)
     assert feed["events"] and feed["next_cursor"] > 0

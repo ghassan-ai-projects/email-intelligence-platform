@@ -195,12 +195,8 @@ ALTER TABLE sync_state  ADD COLUMN account TEXT NOT NULL DEFAULT 'default';
 
 
 # v4: guardrail columns on emails table + contacts table.
-_SCHEMA_V4 = """
-ALTER TABLE emails ADD COLUMN guardrail_score   INTEGER DEFAULT 0;
-ALTER TABLE emails ADD COLUMN guardrail_blocked  INTEGER DEFAULT 0;
-ALTER TABLE emails ADD COLUMN guardrail_warnings TEXT;
-
-CREATE TABLE contacts (
+_GUARDRAIL_TABLES = """
+CREATE TABLE IF NOT EXISTS contacts (
     id         INTEGER PRIMARY KEY,
     addr       TEXT NOT NULL UNIQUE,
     name       TEXT NOT NULL DEFAULT '',
@@ -210,7 +206,7 @@ CREATE TABLE contacts (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE contact_interactions (
+CREATE TABLE IF NOT EXISTS contact_interactions (
     id         INTEGER PRIMARY KEY,
     contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
     email_id   INTEGER REFERENCES emails(id) ON DELETE SET NULL,
@@ -218,5 +214,34 @@ CREATE TABLE contact_interactions (
     timestamp  TEXT NOT NULL DEFAULT (datetime('now')),
     summary    TEXT NOT NULL DEFAULT ''
 );
-CREATE INDEX idx_contact_ints_contact ON contact_interactions(contact_id);
+CREATE INDEX IF NOT EXISTS idx_contact_ints_contact ON contact_interactions(contact_id);
+"""
+
+_SCHEMA_V4 = f"""
+ALTER TABLE emails ADD COLUMN guardrail_score   INTEGER DEFAULT 0;
+ALTER TABLE emails ADD COLUMN guardrail_blocked  INTEGER DEFAULT 0;
+ALTER TABLE emails ADD COLUMN guardrail_warnings TEXT;
+{_GUARDRAIL_TABLES}
+"""
+
+# v5: explicit guardrail state so clean, unscanned, and failed scans are
+# distinguishable to operators and agent-facing tools.
+_SCHEMA_V5 = """
+ALTER TABLE emails ADD COLUMN guardrail_status TEXT NOT NULL DEFAULT 'not_scanned';
+"""
+
+# v6: durable SMTP send-slot reservations for race-free rate limiting.
+_SCHEMA_V6 = """
+CREATE TABLE send_rate_slots (
+    id         INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'reserved',
+    error      TEXT
+);
+CREATE INDEX idx_send_rate_slots_time ON send_rate_slots(created_at, status);
+
+INSERT INTO send_rate_slots (created_at, status)
+SELECT created_at, 'reserved'
+FROM audit_log
+WHERE tool IN ('send_email', 'send_draft') AND error IS NULL;
 """

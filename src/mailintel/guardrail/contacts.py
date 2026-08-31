@@ -1,9 +1,9 @@
 """Contact database: tiered contact management for the guardrail system.
 
-Contacts have three tiers:
-  - **trusted**: the owner and known contacts (warnings still shown, no block)
-  - **known**: previously interacted with (full scanning applies)
-  - **unknown**: never seen before (full scanning applies)
+Contacts have three persisted tiers: trusted, known, and unknown. All email
+content remains untrusted and is scanned regardless of tier; the tier is
+metadata for contact-management workflows until a separate policy explicitly
+defines a safe effect on scanning.
 
 Tier data is persisted in the SQLite contacts table inside the main mail.db.
 """
@@ -89,6 +89,8 @@ class ContactsDB:
         name: str | None = None,
         tier: str | None = None,
         notes: str | None = None,
+        *,
+        commit: bool = True,
     ) -> ContactInfo:
         """Register a new contact or update an existing one.
 
@@ -96,6 +98,9 @@ class ContactsDB:
         Pass tier="unknown" explicitly to demote a contact.
         """
         addr = addr.lower().strip()
+        if tier is not None and tier not in ("trusted", "known", "unknown"):
+            msg = f"invalid tier: {tier!r} (choose: trusted, known, unknown)"
+            raise ValueError(msg)
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         existing = self._conn.execute("SELECT id FROM contacts WHERE addr = ?", (addr,)).fetchone()
 
@@ -103,9 +108,6 @@ class ContactsDB:
             updates: list[str] = []
             params: list[Any] = []
             if tier is not None:
-                if tier not in ("trusted", "known", "unknown"):
-                    msg = f"invalid tier: {tier!r} (choose: trusted, known, unknown)"
-                    raise ValueError(msg)
                 updates.append("tier = ?")
                 params.append(tier)
             if name is not None:
@@ -139,7 +141,8 @@ class ContactsDB:
             contact_id = cur.lastrowid
             assert contact_id is not None
 
-        self._conn.commit()
+        if commit:
+            self._conn.commit()
         return self.lookup(addr)
 
     def update_tier(self, addr: str, tier: str) -> ContactInfo:
@@ -190,14 +193,39 @@ class ContactsDB:
         path = Path(path)
         if not path.exists():
             return 0
-        data = json.loads(path.read_text())
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return 0
+        if not isinstance(data, dict):
+            return 0
+        entries = data.get("contacts", [])
+        if not isinstance(entries, list):
+            return 0
         count = 0
-        for entry in data.get("contacts", []):
-            self.register_contact(
-                addr=entry.get("addr", entry.get("sender", "")),
-                name=entry.get("name", ""),
-                tier=entry.get("tier", "unknown"),
-                notes=entry.get("notes", ""),
-            )
-            count += 1
+        self._conn.execute("SAVEPOINT contacts_import")
+        try:
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                addr = entry.get("addr", entry.get("sender", ""))
+                if not isinstance(addr, str) or not addr.strip():
+                    continue
+                tier = entry.get("tier", "unknown")
+                if not isinstance(tier, str) or tier not in ("trusted", "known", "unknown"):
+                    continue
+                self.register_contact(
+                    addr=addr,
+                    name=str(entry.get("name", "")),
+                    tier=tier,
+                    notes=str(entry.get("notes", "")),
+                    commit=False,
+                )
+                count += 1
+        except Exception:
+            self._conn.execute("ROLLBACK TO SAVEPOINT contacts_import")
+            self._conn.execute("RELEASE SAVEPOINT contacts_import")
+            raise
+        self._conn.execute("RELEASE SAVEPOINT contacts_import")
+        self._conn.commit()
         return count

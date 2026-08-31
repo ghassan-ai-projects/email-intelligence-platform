@@ -8,6 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
+from .enrich.stages import STAGE_ORDER
+
 DEFAULT_CONFIG_DIR = Path("~/.mailintel").expanduser()
 CONFIG_ENV_VAR = "MAILINTEL_CONFIG"
 MAILDIR_ENV_VAR = "MAILINTEL_MAILDIR"
@@ -171,11 +173,8 @@ class GuardrailConfig(BaseModel):
     def scanner_config(self) -> dict:
         """Build a flat config dict for the EmailScanner constructor."""
         cfg: dict = {"block_threshold": self.block_threshold}
-        if self.trusted_domains:
-            cfg["exfiltration_guard"] = {
-                **(self.exfiltration_guard or {}),
-                "trusted_domains": self.trusted_domains,
-            }
+        cfg["exfiltration_guard"] = {**(self.exfiltration_guard or {})}
+        cfg["exfiltration_guard"]["trusted_domains"] = self.trusted_domains
         for key in (
             "prompt_injection",
             "encoding_anomaly",
@@ -194,6 +193,14 @@ class GuardrailConfig(BaseModel):
 class EnrichConfig(BaseModel):
     max_attempts: int = 3
     stages: list[str] = ["attachments", "enrich", "embed"]
+
+    @field_validator("stages")
+    @classmethod
+    def _validate_stages(cls, value: list[str]) -> list[str]:
+        invalid = sorted(set(value) - set(STAGE_ORDER))
+        if invalid:
+            raise ValueError(f"unknown enrichment stage(s): {', '.join(invalid)}")
+        return value
 
 
 class HttpConfig(BaseModel):
