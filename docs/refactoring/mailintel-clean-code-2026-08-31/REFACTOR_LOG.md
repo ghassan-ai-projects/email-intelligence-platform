@@ -9,7 +9,7 @@ and bar check. Tests remain deferred until the final gate.
 - Baseline: `75d2247`
 - Completed files: 3 baseline files plus 22 focused modules
 - Candidate reviews received: 3
-- Production commits: 2 (ingest slice pending commit)
+- Production commits: 3
 - Tests run: 0 (intentional)
 
 ## File records
@@ -38,7 +38,8 @@ result, and any deferred behavior or feature notes.
 - Checks before commit: Ruff check passed, Ruff format passed, Python bytecode
   compilation passed, and `git diff --check` passed. Tests were not run by
   design.
-- Bar result: PASS pending commit. Compatibility exports remain available from
+- Commit: `8fa82e5` (`refactor: split mailintel guardrail detectors`).
+- Bar result: PASS. Compatibility exports remain available from
   `mailintel.guardrail.scanner`; no persistence schema, MCP, sending, or
   sanitization behavior was changed.
 
@@ -53,7 +54,7 @@ result, and any deferred behavior or feature notes.
   `mail.py`, `knowledge.py`, `agent_loop.py`, and `drafts.py`; moved HTTP
   transport to `mcp_tools/http.py`; left configuration, connection ownership,
   audit logging, FastMCP creation, and public re-exports in `mcp_server.py`.
-  The facade is now 181 lines and every new module is below 250 lines.
+  The facade is now 183 lines and every new module is below 250 lines.
 - Review findings and fixes: restored all original MCP tool docstrings and
   descriptions after the reviewer identified lost safety and contract guidance;
   preserved the original audit distinction between truthy error results and
@@ -65,7 +66,8 @@ result, and any deferred behavior or feature notes.
   and formatting passed, mypy passed for all 9 MCP source files, Python
   bytecode compilation passed, and `git diff --check` passed. Tests were not
   run by design.
-- Bar result: PASS pending commit. MCP audit logging, untrusted-content notices,
+- Commit: `273d723` (`refactor: split mailintel MCP tool groups`).
+- Bar result: PASS. MCP audit logging, untrusted-content notices,
   draft-first sending, SMTP delegation, token middleware, and public facade
   compatibility remain intact.
 
@@ -93,6 +95,7 @@ result, and any deferred behavior or feature notes.
 - Checks before commit: Ruff check and formatting passed, mypy passed for all
   five ingestion source files, Python bytecode compilation passed, and
   `git diff --check` passed. Tests were not run by design.
-- Bar result: PASS pending commit. Maildir sanitization, duplicate mapping,
+- Commit: `309444a` (`refactor: split mailintel ingest responsibilities`).
+- Bar result: PASS. Maildir sanitization, duplicate mapping,
   guardrail isolation, audit/event behavior, enrichment job filtering, and
   schema usage remain unchanged.
