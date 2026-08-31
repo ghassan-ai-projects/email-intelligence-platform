@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 11 assessed baseline files
+- Completed files: 7 refactored baseline files plus 12 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 18
+- Candidate reviews received: 19
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -399,3 +399,22 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Account-scoped matching or
   merging requires a separate schema/behavior decision.
+
+## `src/mailintel/events.py` — candidate, implementation, review
+
+- Baseline: 104 lines; the file is a cohesive append-only event-feed boundary
+  covering event validation/emission, pruning, and cursor-based reads.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting write/read/prune would add API and patch risk without a size-limit
+  need.
+- Implementation: no production code change. Event types, JSON/account/timing
+  fields, commit boundaries, cursor and limit clamps, filters, ordering,
+  latest/next cursor, and `has_more` semantics remain unchanged.
+- Review findings: no actionable findings. Producers across ingest, enrichment,
+  write-back, drafts, sender, and MCP were checked; payload sanitization remains
+  owned by producers.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Event schema/versioning,
+  concurrent pagination, and payload redaction/size policy require a separate
+  design.
