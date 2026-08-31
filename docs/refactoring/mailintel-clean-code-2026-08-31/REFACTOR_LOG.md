@@ -7,8 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 baseline files plus 26 focused modules
-- Candidate reviews received: 7
+- Completed files: 7 refactored baseline files plus 1 assessed baseline file
+  and 26 focused modules
+- Candidate reviews received: 8
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -193,3 +194,22 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS. Search result shapes, sanitization,
   guardrail exposure, query limits, SQL ordering, and stats output remain
   unchanged.
+
+## `src/mailintel/config.py` — candidate, implementation, review
+
+- Baseline: 248 lines; the file defines the shared configuration constants,
+  dotenv loading, path expansion, section models, scanner flattening, and TOML
+  loading contract.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  The module is cohesive, already below 250 lines, and splitting model families
+  or loader helpers would fragment the public configuration API.
+- Implementation: no production code change. The existing model defaults,
+  environment precedence, secret/token properties, path expansion, validation,
+  scanner configuration flattening, and public symbols were preserved.
+- Review findings: no actionable findings. The candidate explicitly covered
+  `.env` setdefault behavior, configuration overrides, mutable-list isolation,
+  missing/present TOML behavior, and consumer compatibility.
+- Checks for the no-change bar: baseline comparison for `config.py` is empty
+  and `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). No refactor is justified for
+  this file without a separate configuration-contract decision.

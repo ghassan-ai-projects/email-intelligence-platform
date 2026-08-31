@@ -12,7 +12,7 @@ files are intentionally excluded.
 | Complete | 247 | `src/mailintel/cli.py` |
 | Complete | 197 | `src/mailintel/enrich/pipeline.py` |
 | Complete | 223 | `src/mailintel/search.py` |
-| Pending | 248 | `src/mailintel/config.py` |
+| Assessed (no change) | 248 | `src/mailintel/config.py` |
 | Pending | 221 | `src/mailintel/guardrail/threat_profiles.py` |
 | Pending | 213 | `src/mailintel/knowledge.py` |
 | Pending | 203 | `src/mailintel/guardrail/contacts.py` |
@@ -99,4 +99,6 @@ The search slice also introduced this focused production module:
 | Complete | 40 | `src/mailintel/store_stats.py` |
 
 The line count is a prioritization signal, not a permission to split without a
-cohesive responsibility boundary.
+cohesive responsibility boundary. `Assessed (no change)` records a reviewed
+file that already satisfies the bar without a justified behavior-preserving
+extraction.
