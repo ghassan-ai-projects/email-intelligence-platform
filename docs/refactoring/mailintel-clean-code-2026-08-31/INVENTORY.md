@@ -13,7 +13,7 @@ files are intentionally excluded.
 | Complete | 197 | `src/mailintel/enrich/pipeline.py` |
 | Complete | 223 | `src/mailintel/search.py` |
 | Assessed (no change) | 248 | `src/mailintel/config.py` |
-| Pending | 221 | `src/mailintel/guardrail/threat_profiles.py` |
+| Assessed (no change) | 221 | `src/mailintel/guardrail/threat_profiles.py` |
 | Pending | 213 | `src/mailintel/knowledge.py` |
 | Pending | 203 | `src/mailintel/guardrail/contacts.py` |
 | Pending | 199 | `src/mailintel/drafts.py` |

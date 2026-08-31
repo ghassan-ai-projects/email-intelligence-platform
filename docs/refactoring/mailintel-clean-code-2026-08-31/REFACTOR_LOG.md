@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 1 assessed baseline file
+- Completed files: 7 refactored baseline files plus 2 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 8
+- Candidate reviews received: 9
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -213,3 +213,19 @@ result, and any deferred behavior or feature notes.
   and `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). No refactor is justified for
   this file without a separate configuration-contract decision.
+
+## `src/mailintel/guardrail/threat_profiles.py` — candidate, implementation, review
+
+- Baseline: 221 lines; the file is the single source of truth for guardrail
+  attack-pattern data and its two regex compilation helpers.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting security profile categories would scatter the contract and add
+  import/patch compatibility risk without approaching the size limit.
+- Implementation: no production code change. Every profile constant, list/dict
+  ordering, regex flag, compiler shape, and detector import path is preserved.
+- Review findings: no actionable findings. Detector consumers and the
+  scanner's sanitization/scoring boundary were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Any typed profile model,
+  compilation cache, or external profile format belongs in a separate design.
