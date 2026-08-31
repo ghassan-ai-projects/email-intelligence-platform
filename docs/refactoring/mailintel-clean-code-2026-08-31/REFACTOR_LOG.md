@@ -11,7 +11,9 @@ and bar check. Tests remain deferred until the final gate.
   and 26 focused modules
 - Candidate reviews received: 28
 - Production commits: 7
-- Tests run: 0 (intentional)
+- Tests run: 117 (deferred until final gate)
+- Coverage: 79.05%
+- Final gate: `make ci-check` PASS
 
 ## File records
 
@@ -571,3 +573,19 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). No package API expansion is part
   of this refactor.
+
+## Final repository bar check
+
+- Inventory: all 28 baseline production files are either `Complete` or
+  `Assessed (no change)`; all 26 focused modules are below 250 lines.
+- Candidate/review loop: 28 delegated candidate reviews received; all 7 code
+  slices received implementation review and follow-up fixes where findings
+  existed; each slice has a dedicated refactor commit.
+- Behavior boundary: no behavior change was approved or implemented. Deferred
+  proposals and feature ideas are recorded in `BEHAVIOR_CHANGES.md` and
+  `IDEAS.md` only.
+- Validation: `make format-check`, `make lint`, `make typecheck`, compilation,
+  `git diff --check`, `make build`, and final `make ci-check` passed. The first
+  sandboxed build attempt failed only on DNS dependency resolution; the same
+  build passed after approved network retry.
+- Final result: PASS.

@@ -11,7 +11,7 @@ Each production file follows this sequence:
 5. Commit the file-scoped change.
 6. Re-check the bar and update the inventory.
 
-Tests are not run during the per-file loop. They run once at the final gate.
+Tests were not run during the per-file loop. They ran once at the final gate.
 
 ## Constraints
 
@@ -29,3 +29,9 @@ Largest files are assessed first. Files at or above 250 lines are split only
 where the resulting modules have clear responsibilities. Smaller files still
 receive a candidate assessment and a bar decision.
 
+## Completion evidence
+
+- 28 candidate reviews completed in largest-first order.
+- 7 production refactor commits completed; no-change files are recorded as
+  assessed checkpoints.
+- Final `make ci-check`: PASS, 117 tests, 79.05% coverage.
