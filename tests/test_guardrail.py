@@ -140,6 +140,21 @@ class TestEmailScanner:
         assert "warning_count" in entry
         assert "subject_length" in entry
 
+    def test_scan_log_writer_receives_only_bounded_metadata(self):
+        entries = []
+        scanner = EmailScanner(log_writer=entries.append)
+        scanner.scan("person@example.com", "Private subject", "Private body")
+        assert entries == [
+            {
+                "ts": entries[0]["ts"],
+                "sender_present": True,
+                "subject_length": len("Private subject"),
+                "score": 0,
+                "blocked": False,
+                "warning_count": 0,
+            }
+        ]
+
 
 class TestScanEmailWrapper:
     """Tests for the module-level wrapper API."""

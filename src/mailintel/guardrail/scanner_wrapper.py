@@ -38,18 +38,9 @@ class GuardrailResult:
         )
 
 
-# Module-level cached scanner (lazy initialised).
-_scanner: EmailScanner | None = None
-_scanner_config: dict[str, Any] | None = None
-
-
 def _get_scanner(config_override: dict[str, Any] | None = None) -> EmailScanner:
-    """Return the (cached) EmailScanner, rebuilding if the config changed."""
-    global _scanner, _scanner_config
-    if _scanner is None or config_override != _scanner_config:
-        _scanner_config = config_override
-        _scanner = EmailScanner(config_override)
-    return _scanner
+    """Build a request-local scanner so concurrent configurations cannot leak."""
+    return EmailScanner(config_override)
 
 
 def scan_email(

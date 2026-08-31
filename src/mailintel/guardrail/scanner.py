@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -82,8 +83,14 @@ class EmailScanner:
         },
     }
 
-    def __init__(self, config: dict | str | None = None):
+    def __init__(
+        self,
+        config: dict | str | None = None,
+        *,
+        log_writer: Callable[[dict[str, object]], None] | None = None,
+    ):
         self._config = self._load_config(config)
+        self._log_writer = log_writer
         self._block_threshold = self._config.get(
             "block_threshold", self.DEFAULT_CONFIG["block_threshold"]
         )
@@ -181,13 +188,6 @@ class EmailScanner:
 
     def _log_scan(self, sender: str, subject: str, result: ScanResult) -> None:
         """Append a bounded scan summary to the best-effort tracking log."""
-        log_path = Path(
-            os.environ.get(
-                "EMAIL_GUARDRAIL_LOG",
-                str(Path.home() / ".mailintel" / "guardrail-scan-log.ndjson"),
-            )
-        )
-        log_path.parent.mkdir(parents=True, exist_ok=True)
         entry = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "sender_present": bool(sender),
@@ -196,6 +196,19 @@ class EmailScanner:
             "blocked": result.blocked,
             "warning_count": len(result.warnings),
         }
+        if self._log_writer is not None:
+            try:
+                self._log_writer(entry)
+            except Exception:
+                pass
+            return
+        log_path = Path(
+            os.environ.get(
+                "EMAIL_GUARDRAIL_LOG",
+                str(Path.home() / ".mailintel" / "guardrail-scan-log.ndjson"),
+            )
+        )
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with log_path.open("a", encoding="utf-8") as log_file:
                 log_file.write(json.dumps(entry) + "\n")
