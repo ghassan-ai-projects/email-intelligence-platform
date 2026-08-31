@@ -21,7 +21,7 @@ files are intentionally excluded.
 | Assessed (no change) | 152 | `src/mailintel/enrich/embeddings.py` |
 | Assessed (no change) | 114 | `src/mailintel/enrich/attachments.py` |
 | Assessed (no change) | 109 | `src/mailintel/guardrail/scanner_wrapper.py` |
-| Pending | 107 | `src/mailintel/actions.py` |
+| Assessed (no change) | 107 | `src/mailintel/actions.py` |
 | Pending | 104 | `src/mailintel/threading_.py` |
 | Pending | 104 | `src/mailintel/events.py` |
 | Pending | 93 | `src/mailintel/enrich/llm.py` |

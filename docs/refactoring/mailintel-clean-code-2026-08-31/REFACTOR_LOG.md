@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 9 assessed baseline files
+- Completed files: 7 refactored baseline files plus 10 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 16
+- Candidate reviews received: 17
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -362,3 +362,21 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Cache concurrency/invalidation,
   typed config parameters, and error telemetry require a separate design.
+
+## `src/mailintel/actions.py` — candidate, implementation, review
+
+- Baseline: 107 lines; the file is a cohesive agent write-back API sharing
+  sanitization, event emission, account lookup, and connection/commit ownership
+  across action completion, importance, tags, and notes.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting these small operations would fragment the write-back contract and
+  risk MCP seams without a size-limit need.
+- Implementation: no production code change. Error shapes, status/timestamp
+  behavior, event payloads, clamps, tag normalization/order, note append format,
+  commits, public symbols, and module-level patch points remain unchanged.
+- Review findings: no actionable findings. Agent-loop MCP wrappers, audit/event
+  behavior, and the existing untag behavior were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Tag limits, action transitions,
+  and idempotent event semantics require a separate write-back design.
