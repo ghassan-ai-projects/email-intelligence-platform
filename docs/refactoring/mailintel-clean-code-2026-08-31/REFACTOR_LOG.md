@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 20 assessed baseline files
+- Completed files: 7 refactored baseline files plus 21 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 27
+- Candidate reviews received: 28
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -555,3 +555,19 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Centralizing version metadata
   with build configuration requires a separate packaging decision.
+
+## `src/mailintel/enrich/__init__.py` — candidate, implementation, review
+
+- Baseline: 0 lines; the file intentionally preserves package namespace
+  behavior without eager re-export side effects.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Adding exports or eager imports would change import timing and could create
+  cycles without improving the package boundary.
+- Implementation: no production code change. The file remains empty, and
+  direct submodule imports remain the established compatibility surface.
+- Review findings: no actionable findings. Pipeline, embeddings, LLM,
+  attachment, prompt, CLI, MCP, sender, and test import consumers were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). No package API expansion is part
+  of this refactor.
