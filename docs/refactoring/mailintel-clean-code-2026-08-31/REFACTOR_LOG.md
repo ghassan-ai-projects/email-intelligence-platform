@@ -1,0 +1,591 @@
+# Refactoring Loop Log
+
+This log is updated after each candidate review, implementation review, commit,
+and bar check. Tests remain deferred until the final gate.
+
+## Current state
+
+- Branch: `codex/refactor-mailintel-clean-code-20260831`
+- Baseline: `75d2247`
+- Completed files: 7 refactored baseline files plus 21 assessed baseline files
+  and 26 focused modules
+- Candidate reviews received: 28
+- Production commits: 7
+- Tests run: 117 (deferred until final gate)
+- Coverage: 79.05%
+- Final gate: `make ci-check` PASS
+
+## File records
+
+Detailed records will be added in largest-first order. Each record includes the
+candidate review source, changed paths, review findings and fixes, commit, bar
+result, and any deferred behavior or feature notes.
+
+## `src/mailintel/guardrail/scanner.py` — candidate, implementation, review
+
+- Baseline: 1,092 lines; no individual function exceeded 250 lines.
+- Candidate reviewer: delegated read-only review, which identified the mixed
+  detector contracts, eight detector implementations, configuration, scoring,
+  and logging as the cohesive split boundary. It specifically required keeping
+  detector order, warning text/order, score caps, shallow config merging,
+  truncation state, and best-effort logging unchanged.
+- Implementation: moved the detector contract and each detector into
+  `guardrail/detectors/`, leaving `scanner.py` as the public orchestration and
+  compatibility facade. `scanner.py` is now 208 lines; every new module is
+  below 250 lines. Extracted scanner steps are named for their intent.
+- Review findings: initial static review found export/import ordering, mutable
+  class-constant annotations, unused protocol parameters, and line-length
+  issues. These were fixed with no behavior change. An accidental duplicate
+  `detectors/unicode.py` from the delegated task was removed; the retained
+  implementation is `detectors/unicode_attack.py`.
+- Checks before commit: Ruff check passed, Ruff format passed, Python bytecode
+  compilation passed, and `git diff --check` passed. Tests were not run by
+  design.
+- Commit: `8fa82e5` (`refactor: split mailintel guardrail detectors`).
+- Bar result: PASS. Compatibility exports remain available from
+  `mailintel.guardrail.scanner`; no persistence schema, MCP, sending, or
+  sanitization behavior was changed.
+
+## `src/mailintel/mcp_server.py` — candidate, implementation, review
+
+- Baseline: 878 lines; the file combined audit infrastructure, 32 MCP tools,
+  draft/send workflows, and HTTP transport.
+- Candidate reviewer: delegated review confirmed that the 32 public tool names
+  and Python signatures were preserved and identified module import coupling,
+  audit error handling, and HTTP middleware as the main review risks.
+- Implementation: grouped tools into `mcp_tools/search.py`, `details.py`,
+  `mail.py`, `knowledge.py`, `agent_loop.py`, and `drafts.py`; moved HTTP
+  transport to `mcp_tools/http.py`; left configuration, connection ownership,
+  audit logging, FastMCP creation, and public re-exports in `mcp_server.py`.
+  The facade is now 183 lines and every new module is below 250 lines.
+- Review findings and fixes: restored all original MCP tool docstrings and
+  descriptions after the reviewer identified lost safety and contract guidance;
+  preserved the original audit distinction between truthy error results and
+  successful/falsey values; preserved tool registration order; and checked the
+  registered surface as 32 names with matching signatures and docstrings. The
+  reviewer also found mypy could not infer the shared FastMCP object in leaf
+  modules; an explicit `mcp: FastMCP` annotation fixed all 32 type errors.
+- Checks before commit: 32 tools registered in the original order, Ruff check
+  and formatting passed, mypy passed for all 9 MCP source files, Python
+  bytecode compilation passed, and `git diff --check` passed. Tests were not
+  run by design.
+- Commit: `273d723` (`refactor: split mailintel MCP tool groups`).
+- Bar result: PASS. MCP audit logging, untrusted-content notices,
+  draft-first sending, SMTP delegation, token middleware, and public facade
+  compatibility remain intact.
+
+## `src/mailintel/ingest.py` — candidate, implementation, review
+
+- Baseline: 442 lines; the file combined RFC822 parsing, Maildir discovery,
+  SQLite projections, incremental synchronization, cleanup, events, guardrail
+  scanning, and thread maintenance.
+- Candidate reviewer: delegated read-only review identified four cohesive
+  boundaries: parser, Maildir helpers, relational/FTS/enrichment projections,
+  and cleanup/thread maintenance. It called out preserving traversal order,
+  duplicate-copy mapping, deletion order, guardrail failure isolation, and the
+  final transaction commit.
+- Implementation: extracted `ingest_parser.py`, `ingest_maildir.py`,
+  `ingest_storage.py`, and `ingest_cleanup.py`; left `ingest.py` as a 202-line
+  orchestration facade with explicit historical aliases. Every extracted
+  module is below 250 lines, and public steps read as ingestion operations.
+- Review findings and fixes: the first review identified missing historical
+  parser/storage/threading exports, an added assertion that changed an
+  impossible-DB error type, and a skipped empty-thread refresh call. The
+  follow-up identified that legacy private names were importable but not used
+  as internal patch points. All findings were fixed; the facade now dispatches
+  through the compatibility aliases and preserves the baseline call/order
+  boundaries.
+- Checks before commit: Ruff check and formatting passed, mypy passed for all
+  five ingestion source files, Python bytecode compilation passed, and
+  `git diff --check` passed. Tests were not run by design.
+- Commit: `309444a` (`refactor: split mailintel ingest responsibilities`).
+- Bar result: PASS. Maildir sanitization, duplicate mapping,
+  guardrail isolation, audit/event behavior, enrichment job filtering, and
+  schema usage remain unchanged.
+
+## `src/mailintel/db.py` — candidate, implementation, review
+
+- Baseline: 334 lines; the file combined four versioned schema scripts,
+  connection setup, migrations, contact import, and metadata accessors.
+- Candidate reviewer: delegated read-only review selected the schema scripts as
+  the only required cohesive extraction for the 250-line bar. It required
+  preserving the SQL byte-for-byte, migration order, sqlite-vec loading,
+  transaction ownership, and all public/private names.
+- Implementation: moved `_SCHEMA`, `_SCHEMA_V2`, `_SCHEMA_V3`, and `_SCHEMA_V4`
+  into `db_schema.py`, retaining explicit re-exports from `db.py`. The facade
+  is now 115 lines; the schema module is 222 lines.
+- Review findings: no actionable findings. Static review confirmed exact SQL
+  equality, preserved connection pragmas and extension lifecycle, unchanged
+  migration order and commit semantics, and unchanged contact/meta behavior.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  database modules, Python bytecode compilation passed, the four SQL literals
+  compared equal to baseline, and `git diff --check` passed. Tests were not run
+  by design.
+- Commit: `608b313` (`refactor: separate mailintel schema scripts`).
+- Bar result: PASS. No schema version, migration, connection,
+  contact-import, or metadata behavior changed.
+
+## `src/mailintel/cli.py` — candidate, implementation, review
+
+- Baseline: 296 lines; the file combined Typer command registration, setup
+  scaffolding, sync/enrichment flows, watch-loop behavior, search, and store
+  maintenance commands.
+- Candidate reviewer: delegated read-only review selected the configuration
+  template and `init` implementation as the only cohesive extraction needed for
+  the 250-line bar. It required preserving command names/options, output text,
+  lazy imports, connection closure, watch timing, and exit behavior.
+- Implementation: moved setup scaffolding into `cli_setup.py`, leaving
+  `cli.py` as a 247-line command facade. `CONFIG_TEMPLATE`, `config_path`, and
+  `DEFAULT_CONFIG_DIR` remain available and are passed through the wrapper so
+  historical import and monkeypatch seams still work.
+- Review findings and fixes: the first review found that two setup symbols were
+  no longer exposed and the template export was inert for monkeypatching. The
+  wrapper and helper were changed to pass the current facade bindings. The
+  follow-up review found no remaining issues; command registration, options,
+  defaults, output, and timing remained unchanged.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  CLI modules, Python bytecode compilation passed, the configuration template
+  compared equal to baseline, and `git diff --check` passed. Tests were not run
+  by design.
+- Commit: `44f5a96` (`refactor: separate mailintel CLI setup`).
+- Bar result: PASS. No command, configuration-path, output,
+  exit-code, connection-lifecycle, or subprocess behavior changed.
+
+## `src/mailintel/enrich/pipeline.py` — candidate, implementation, review
+
+- Baseline: 287 lines; the file combined queue state transitions, enrichment
+  persistence, three stage runners, and stage-order orchestration.
+- Candidate reviewer: delegated read-only review proposed the queue helpers as
+  one possible extraction and required preserving claims, stale recovery,
+  retries, commits, provider boundaries, stage order, and compatibility seams.
+- Implementation: extracted the enrichment persistence projection and event
+  writer into `enrich/enrichment_storage.py`, leaving queue state and stage
+  runners together. `pipeline.py` is now 197 lines and the storage module is
+  115 lines. A three-argument `store_enrichment` wrapper remains in the facade.
+- Review findings and fixes: the first review found that moving persistence
+  would hide the historical `pipeline.emit` and `pipeline.sanitize_text`
+  bindings. The wrapper now passes those live facade callbacks, along with the
+  facade `_now`, into the extracted function. The follow-up found no remaining
+  issues; SQL, sanitization, event, timestamp, stage, and commit ordering are
+  preserved.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  pipeline modules, Python bytecode compilation passed, and `git diff --check`
+  passed. Tests were not run by design.
+- Commit: `2dd453a` (`refactor: separate enrichment persistence`).
+- Bar result: PASS. Queue claims/retries, provider and embedder
+  boundaries, persistence projections, event emission, and stage ordering are
+  unchanged.
+
+## `src/mailintel/search.py` — candidate, implementation, review
+
+- Baseline: 251 lines; the file combined FTS/filter search, email and thread
+  details, thread search, and store statistics.
+- Candidate reviewer: delegated read-only review selected `get_stats` as a
+  cohesive store-metrics boundary, requiring its query order, result shape,
+  public export, and all search/detail query behavior to remain unchanged.
+- Implementation: moved `get_stats` into `store_stats.py` and re-exported the
+  same callable from `search.py`. The facade is now 223 lines and the new
+  metrics module is 40 lines.
+- Review findings: no actionable findings. Static review confirmed exact stats
+  queries, ordering, result shape, limits, FTS/LIKE/date/tag handling,
+  guardrail warning parsing, and the `_like_escape` patch point.
+- Checks before commit: Ruff check and formatting passed, mypy passed for both
+  search modules, Python bytecode compilation passed, public signature/export
+  checks passed, and `git diff --check` passed. Tests were not run by design.
+- Commit: `3770576` (`refactor: separate search store statistics`).
+- Bar result: PASS. Search result shapes, sanitization,
+  guardrail exposure, query limits, SQL ordering, and stats output remain
+  unchanged.
+
+## `src/mailintel/config.py` — candidate, implementation, review
+
+- Baseline: 248 lines; the file defines the shared configuration constants,
+  dotenv loading, path expansion, section models, scanner flattening, and TOML
+  loading contract.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  The module is cohesive, already below 250 lines, and splitting model families
+  or loader helpers would fragment the public configuration API.
+- Implementation: no production code change. The existing model defaults,
+  environment precedence, secret/token properties, path expansion, validation,
+  scanner configuration flattening, and public symbols were preserved.
+- Review findings: no actionable findings. The candidate explicitly covered
+  `.env` setdefault behavior, configuration overrides, mutable-list isolation,
+  missing/present TOML behavior, and consumer compatibility.
+- Checks for the no-change bar: baseline comparison for `config.py` is empty
+  and `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). No refactor is justified for
+  this file without a separate configuration-contract decision.
+
+## `src/mailintel/guardrail/threat_profiles.py` — candidate, implementation, review
+
+- Baseline: 221 lines; the file is the single source of truth for guardrail
+  attack-pattern data and its two regex compilation helpers.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting security profile categories would scatter the contract and add
+  import/patch compatibility risk without approaching the size limit.
+- Implementation: no production code change. Every profile constant, list/dict
+  ordering, regex flag, compiler shape, and detector import path is preserved.
+- Review findings: no actionable findings. Detector consumers and the
+  scanner's sanitization/scoring boundary were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Any typed profile model,
+  compilation cache, or external profile format belongs in a separate design.
+
+## `src/mailintel/knowledge.py` — candidate, implementation, review
+
+- Baseline: 213 lines; the file is a cohesive knowledge/read model for action
+  items, facts, decisions, sender summaries, waiting replies, and daily
+  summaries.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting by query would fragment the public knowledge API without
+  approaching the size limit.
+- Implementation: no production code change. Existing wildcard escaping,
+  limits, SQL predicates/order, date calculations, source context, result
+  shapes, and public symbols remain unchanged.
+- Review findings: no actionable findings. MCP consumers, untrusted-content
+  boundaries, and private helper compatibility were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Query builders, typed result
+  schemas, pagination, or deterministic ordering need a separate contract
+  decision.
+
+## `src/mailintel/guardrail/contacts.py` — candidate, implementation, review
+
+- Baseline: 203 lines; the file is one cohesive `ContactsDB` domain object with
+  shared address normalization, value objects, lookup/list reads, mutations,
+  interaction writes, commits, and JSON import.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting methods would fragment transaction ownership and the public contact
+  API without approaching the size limit.
+- Implementation: no production code change. Normalization, ordering, tier
+  validation, defaults, commit boundaries, interaction sequence, import count,
+  and public exports remain unchanged.
+- Review findings: no actionable findings for this refactor. The candidate
+  explicitly preserved the current asymmetry where invalid tiers are validated
+  for existing contacts but not new rows.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Tier validation consistency or
+  other contact policy changes require a separate security review.
+
+## `src/mailintel/drafts.py` — candidate, implementation, review
+
+- Baseline: 199 lines; the file is a cohesive draft lifecycle covering
+  serialization, sanitized CRUD, transaction ownership, atomic send claiming,
+  sender guardrails, and sent-state events.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting CRUD from sending would fragment the draft state machine and risk
+  its safety/monkeypatch seams without a size-limit need.
+- Implementation: no production code change. Recipient and attachment JSON
+  handling, sanitization, status transitions, commits, sender delegation,
+  rollback, event payloads, and public MCP-facing functions remain unchanged.
+- Review findings: no actionable findings. Draft-first behavior, attachment
+  fences, allowlists, rate-cap delegation, and module-level compatibility seams
+  were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Stronger recipient normalization,
+  status transition modeling, or an outbox would require a separate safety and
+  transaction design.
+
+## `src/mailintel/sender.py` — candidate, implementation, review
+
+- Baseline: 192 lines; the file is a cohesive guarded send transaction from
+  rate and recipient/path checks through MIME construction, SMTP execution,
+  account/event persistence, and response shaping.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting validation, message construction, and send persistence would risk
+  guardrail ordering and patch seams without a size-limit need.
+- Implementation: no production code change. SMTP opt-in, rate caps,
+  recipient allowlists, attachment fences, reply headers, error text, event
+  payloads, commit timing, and public symbols remain unchanged.
+- Review findings: no actionable findings. MCP mail and draft send consumers,
+  security boundaries, and module-level seams were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Stronger address normalization,
+  timeout/config hardening, attachment caps, or an outbox require a separate
+  security and delivery design.
+
+## `src/mailintel/enrich/embeddings.py` — candidate, implementation, review
+
+- Baseline: 152 lines; the file is one cohesive embedding boundary covering
+  provider protocols/factories, lazy SDK loading, vector serialization and
+  metadata, input shaping, storage, and KNN lookup.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting providers from vector storage would add coupling and public import
+  risk without a size or ownership need.
+- Implementation: no production code change. Provider errors and request
+  parameters, dimension validation, sqlite-vec DDL/meta behavior, input order
+  and truncation, storage replacement, KNN ordering, and no-such-table fallback
+  remain unchanged.
+- Review findings: no actionable findings. Pipeline, CLI, MCP search, and test
+  import paths were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). A provider registry, vector
+  validation, retry policy, or metadata migration needs a separate design.
+
+## `src/mailintel/enrich/attachments.py` — candidate, implementation, review
+
+- Baseline: 114 lines; the file is a cohesive attachment boundary for Maildir
+  lookup, message/attachment loading, PDF/text extraction, and pipeline text
+  persistence.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting lookup, extraction, and persistence would fragment shared path and
+  parser behavior without a size-limit need.
+- Implementation: no production code change. Lazy PDF loading, page/text
+  limits, failure handling, path fallback, MIME/extension behavior, raw stored
+  payloads, sanitization boundary, NULL-only updates, and no-commit behavior
+  remain unchanged.
+- Review findings: no actionable findings. Pipeline, sender, and MCP details
+  consumers plus the separate local attachment allowlist fence were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Extending pipeline extraction to
+  non-PDF text attachments is a separate behavior decision.
+
+## `src/mailintel/guardrail/scanner_wrapper.py` — candidate, implementation, review
+
+- Baseline: 109 lines; the file is a cohesive adapter boundary for the cached
+  scanner, typed result conversion/timing, parsed entry point, and config-object
+  adaptation.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting the adapter would risk cache, timing, and import/patch seams without
+  a line-limit need.
+- Implementation: no production code change. Scanner re-exports, result fields
+  and mapping, cache rebuild behavior, lazy initialization, header defaults,
+  timing, config flattening, and public entry points remain unchanged.
+- Review findings: no actionable findings. Guardrail package, ingest, and MCP
+  draft consumers were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Cache concurrency/invalidation,
+  typed config parameters, and error telemetry require a separate design.
+
+## `src/mailintel/actions.py` — candidate, implementation, review
+
+- Baseline: 107 lines; the file is a cohesive agent write-back API sharing
+  sanitization, event emission, account lookup, and connection/commit ownership
+  across action completion, importance, tags, and notes.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting these small operations would fragment the write-back contract and
+  risk MCP seams without a size-limit need.
+- Implementation: no production code change. Error shapes, status/timestamp
+  behavior, event payloads, clamps, tag normalization/order, note append format,
+  commits, public symbols, and module-level patch points remain unchanged.
+- Review findings: no actionable findings. Agent-loop MCP wrappers, audit/event
+  behavior, and the existing untag behavior were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Tag limits, action transitions,
+  and idempotent event semantics require a separate write-back design.
+
+## `src/mailintel/threading_.py` — candidate, implementation, review
+
+- Baseline: 104 lines; the file is a cohesive threading boundary for subject
+  normalization/reply detection, reference/child/fallback assignment, thread
+  merging, and statistics refresh.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  The operations share ingestion's transaction and splitting would add coupling
+  without a size-limit need.
+- Implementation: no production code change. Regex normalization, 60-day
+  fallback, reference and child lookups, minimum-ID merge rule, SQL cleanup,
+  account defaults, no-commit behavior, and refresh semantics remain unchanged.
+- Review findings: no actionable findings. Ingest storage/cleanup consumers,
+  public symbols, private patch points, and unordered-set refresh behavior were
+  explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Account-scoped matching or
+  merging requires a separate schema/behavior decision.
+
+## `src/mailintel/events.py` — candidate, implementation, review
+
+- Baseline: 104 lines; the file is a cohesive append-only event-feed boundary
+  covering event validation/emission, pruning, and cursor-based reads.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting write/read/prune would add API and patch risk without a size-limit
+  need.
+- Implementation: no production code change. Event types, JSON/account/timing
+  fields, commit boundaries, cursor and limit clamps, filters, ordering,
+  latest/next cursor, and `has_more` semantics remain unchanged.
+- Review findings: no actionable findings. Producers across ingest, enrichment,
+  write-back, drafts, sender, and MCP were checked; payload sanitization remains
+  owned by producers.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Event schema/versioning,
+  concurrent pagination, and payload redaction/size policy require a separate
+  design.
+
+## `src/mailintel/enrich/llm.py` — candidate, implementation, review
+
+- Baseline: 93 lines; the file is a cohesive LLM boundary covering the provider
+  protocol, response parsing/error type, two lazy-loaded providers, and factory.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting parser/providers would add import and monkeypatch risk without a
+  size-limit need.
+- Implementation: no production code change. JSON fence/prose fallback,
+  errors, lazy SDK imports, API-key messages, provider request payloads,
+  response filtering, factory selection, and public symbols remain unchanged.
+- Review findings: no actionable findings. Pipeline consumers and enrichment
+  parser/provider tests were checked; sanitization remains outside this
+  transport boundary.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Structured validation,
+  retry/backoff, timeout policy, and provider registry require separate design.
+
+## `src/mailintel/enrich/prompts.py` — candidate, implementation, review
+
+- Baseline: 78 lines; the file is a cohesive enrichment-prompt boundary with
+  one system contract and one DB-backed prompt builder.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting prompt text from construction would add import/patch risk at no
+  practical maintenance benefit.
+- Implementation: no production code change. The system contract, explicit
+  untrusted-content notice, recipient/body/attachment query order, truncation,
+  empty-body fallback, headings, and final joining behavior remain unchanged.
+- Review findings: no actionable findings. Pipeline imports and the security
+  boundary around prompt-injection content were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Delimiters/escaping, attachment
+  budgets, stable SQL ordering, and prompt versioning require a separate model
+  and security design.
+
+## `src/mailintel/guardrail/db.py` — candidate, implementation, review
+
+- Baseline: 69 lines; the file is a cohesive guardrail persistence/migration
+  boundary covering idempotent schema safety-net work and result projection
+  writes, both with deliberate commit ownership.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting migration and result storage would add transaction/import risk with
+  no meaningful maintenance benefit.
+- Implementation: no production code change. Table probes, ordered/defaulted
+  column additions, contacts DDL, partial-schema behavior, result SQL,
+  serialization, blocked conversion, and commits remain unchanged.
+- Review findings: no actionable findings. Guardrail tests, ingest, database
+  schema v4, and MCP detail consumers were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Partial contacts repair and
+  warning-payload encoding require a separate migration/data design.
+
+## `src/mailintel/models.py` — candidate, implementation, review
+
+- Baseline: 68 lines; the file is a cohesive structured-enrichment contract of
+  constants and four nested Pydantic/domain models.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting models would fragment shared validation and serialization imports
+  without a size or ownership need.
+- Implementation: no production code change. Field names/types/defaults,
+  default factories, coercion, category/sentiment normalization, confidence and
+  importance clamps, fallback behavior, and public imports remain unchanged.
+- Review findings: no actionable findings. Pipeline/storage consumers and
+  serialized result shapes were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Stricter literals/date fields or
+  model configuration require a separate compatibility decision.
+
+## `src/mailintel/security.py` — candidate, implementation, review
+
+- Baseline: 45 lines; the file is a cohesive security boundary for the
+  untrusted-content notice, invisible/control-character sanitization, and
+  recipient allowlist predicate.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting these policies would scatter security behavior and increase import
+  and patch risk.
+- Implementation: no production code change. Strip ranges, tab/newline
+  preservation, `None` handling, notice text, empty-pattern behavior, address
+  validation, and case-insensitive wildcard matching remain unchanged.
+- Review findings: no actionable findings. Ingest, attachments, enrichment,
+  drafts/actions, sender, and MCP details consumers were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). RFC parsing, pattern
+  normalization, or empty-allowlist changes require a separate security review.
+
+## `src/mailintel/sync.py` — candidate, implementation, review
+
+- Baseline: 33 lines; the file is a cohesive external-command adapter with one
+  error type and one subprocess operation.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting command validation/execution would add no useful boundary.
+- Implementation: no production code change. Tokenization, empty-command and
+  executable checks, list-based non-shell subprocess execution, timeout,
+  stderr/stdout truncation, error text/chaining, and public imports remain
+  unchanged.
+- Review findings: no actionable findings. CLI, watch, MCP knowledge, and test
+  consumers were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Structured command config,
+  explicit environment/cwd, cancellation, or retries require separate design.
+
+## `src/mailintel/guardrail/__init__.py` — candidate, implementation, review
+
+- Baseline: 23 lines; the file is a minimal package facade with intentional
+  public exports and no runtime initialization beyond imports.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Refactoring this facade would add no value and could change import behavior.
+- Implementation: no production code change. Import order, `__all__`, public
+  symbols, and package side-effect behavior remain unchanged.
+- Review findings: no actionable findings. Guardrail package consumers and
+  package import behavior were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Expanding the public API, such
+  as exporting config-specific scanner entry points, requires separate review.
+
+## `src/mailintel/__init__.py` — candidate, implementation, review
+
+- Baseline: 3 lines; the file is an intentionally minimal package metadata
+  module with only the package docstring and version.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  No clean-code boundary exists at this size.
+- Implementation: no production code change. Version value, docstring,
+  side-effect-free import behavior, and submodule import compatibility remain
+  unchanged.
+- Review findings: no actionable findings. Package and common submodule import
+  consumers were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Centralizing version metadata
+  with build configuration requires a separate packaging decision.
+
+## `src/mailintel/enrich/__init__.py` — candidate, implementation, review
+
+- Baseline: 0 lines; the file intentionally preserves package namespace
+  behavior without eager re-export side effects.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Adding exports or eager imports would change import timing and could create
+  cycles without improving the package boundary.
+- Implementation: no production code change. The file remains empty, and
+  direct submodule imports remain the established compatibility surface.
+- Review findings: no actionable findings. Pipeline, embeddings, LLM,
+  attachment, prompt, CLI, MCP, sender, and test import consumers were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). No package API expansion is part
+  of this refactor.
+
+## Final repository bar check
+
+- Inventory: all 28 baseline production files are either `Complete` or
+  `Assessed (no change)`; all 26 focused modules are below 250 lines.
+- Candidate/review loop: 28 delegated candidate reviews received; all 7 code
+  slices received implementation review and follow-up fixes where findings
+  existed; each slice has a dedicated refactor commit.
+- Behavior boundary: no behavior change was approved or implemented. Deferred
+  proposals and feature ideas are recorded in `BEHAVIOR_CHANGES.md` and
+  `IDEAS.md` only.
+- Validation: `make format-check`, `make lint`, `make typecheck`, compilation,
+  `git diff --check`, `make build`, and final `make ci-check` passed. The first
+  sandboxed build attempt failed only on DNS dependency resolution; the same
+  build passed after approved network retry.
+- Final result: PASS.

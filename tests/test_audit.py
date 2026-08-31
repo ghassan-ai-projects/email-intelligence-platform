@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from email.message import EmailMessage
 
 import pytest
@@ -9,7 +10,12 @@ import pytest
 from mailintel import drafts, mcp_server, sender
 from mailintel.enrich.pipeline import run_pipeline
 from mailintel.ingest import ingest
-from tests.test_enrich import FakeEmbedder, FakeProvider
+from mailintel.mcp_tools import runtime
+from tests.fakes import FakeEmbedder, FakeProvider
+
+
+def _recent_timestamp() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _setup(conn, cfg):
@@ -20,7 +26,7 @@ def _setup(conn, cfg):
 @pytest.fixture
 def served(conn, cfg, monkeypatch):
     _setup(conn, cfg)
-    monkeypatch.setattr(mcp_server, "_config", cfg)
+    monkeypatch.setattr(runtime, "_config", cfg)
     return cfg
 
 
@@ -58,7 +64,56 @@ def test_audit_args_truncated(served, conn):
     mcp_server.create_draft(["a@b.com"], "subject", long_body)
     row = conn.execute("SELECT * FROM audit_log WHERE tool = 'create_draft'").fetchone()
     assert len(row["args"]) < 3000
-    assert row["args"].endswith("…")
+    assert "redacted" in row["args"]
+    assert long_body not in row["args"]
+
+
+def test_audit_redacts_scan_content(served, conn):
+    mcp_server.scan_email_mcp(
+        "sender-secret@example.com", "subject-secret", "body-secret-unique-marker"
+    )
+    row = conn.execute(
+        "SELECT args FROM audit_log WHERE tool = 'scan_email_mcp' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert "body-secret-unique-marker" not in row["args"]
+    assert "subject-secret" not in row["args"]
+    assert "sender-secret@example.com" not in row["args"]
+    assert row["args"].count("redacted") == 3
+
+
+def test_audit_result_summary_contains_only_event_metadata(served, conn):
+    mcp_server.create_draft(["a@b.com"], "private-result-marker", "private body")
+    mcp_server.get_events_since()
+    row = conn.execute(
+        "SELECT result_summary FROM audit_log WHERE tool = 'get_events_since' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert "private-result-marker" not in (row["result_summary"] or "")
+    assert "private body" not in (row["result_summary"] or "")
+    assert '"events_count"' in row["result_summary"]
+
+
+def test_invalid_mcp_arguments_are_audited(served, conn):
+    with pytest.raises(TypeError):
+        mcp_server.get_email()
+    row = conn.execute(
+        "SELECT error FROM audit_log WHERE tool = 'get_email' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert "required argument" in row["error"]
+
+
+def test_audit_intent_survives_result_finalize_failure(served, conn, monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("audit finalize unavailable")
+
+    monkeypatch.setattr(runtime, "_finish_audit", fail)
+    with pytest.raises(RuntimeError, match="audit finalize unavailable"):
+        mcp_server.create_draft(["private@example.com"], "subject", "body")
+
+    audit = conn.execute(
+        "SELECT error FROM audit_log WHERE tool = 'create_draft' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert audit["error"] == "in_progress"
+    assert conn.execute("SELECT status FROM drafts").fetchone()[0] == "draft"
 
 
 # --- rate caps ---------------------------------------------------------------
@@ -69,11 +124,11 @@ def test_send_email_rate_cap_blocks(conn, cfg):
     cfg.smtp.host = "mail.example.com"
     cfg.smtp.max_sends_per_hour = 2
 
-    # Seed the audit log with two recent sends.
+    # Seed two durable reservations.
     for _ in range(2):
         conn.execute(
-            "INSERT INTO audit_log (tool, args, caller, created_at) VALUES (?, ?, ?, ?)",
-            ("send_email", "{}", "test", sender._now()),
+            "INSERT INTO send_rate_slots (created_at, status) VALUES (?, 'reserved')",
+            (_recent_timestamp(),),
         )
     conn.commit()
 
@@ -90,8 +145,8 @@ def test_send_draft_rate_cap_blocks(conn, cfg, monkeypatch):
 
     d = drafts.create_draft(conn, ["a@b.com"], "s", "b")
     conn.execute(
-        "INSERT INTO audit_log (tool, args, caller, created_at) VALUES (?, ?, ?, ?)",
-        ("send_email", "{}", "test", sender._now()),
+        "INSERT INTO send_rate_slots (created_at, status) VALUES (?, 'reserved')",
+        (_recent_timestamp(),),
     )
     conn.commit()
 
@@ -132,8 +187,8 @@ def test_rate_cap_zero_is_unlimited(conn, cfg, monkeypatch):
     # Seed many prior sends; cap is disabled so this should still go through.
     for _ in range(20):
         conn.execute(
-            "INSERT INTO audit_log (tool, args, caller, created_at) VALUES (?, ?, ?, ?)",
-            ("send_email", "{}", "test", sender._now()),
+            "INSERT INTO send_rate_slots (created_at, status) VALUES (?, 'reserved')",
+            (_recent_timestamp(),),
         )
     conn.commit()
 
@@ -161,7 +216,7 @@ def test_events_and_drafts_carry_account(conn, cfg):
 
 def test_audit_log_has_account_column(conn, cfg, monkeypatch):
     _setup(conn, cfg)
-    monkeypatch.setattr(mcp_server, "_config", cfg)
+    monkeypatch.setattr(runtime, "_config", cfg)
     mcp_server.get_stats()
     row = conn.execute("SELECT account FROM audit_log LIMIT 1").fetchone()
     assert row["account"] == "default"

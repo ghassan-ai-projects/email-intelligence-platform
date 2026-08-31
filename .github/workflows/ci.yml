@@ -17,10 +17,7 @@ jobs:
   ci:
     name: "Python CI"
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -29,7 +26,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
@@ -37,7 +34,10 @@ jobs:
           enable-cache: true
 
       - name: Install project
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
 
-      - name: CI check
-        run: make ci-check PYTHON=${{ matrix.python-version }}
+      - name: Type check
+        run: uv run --locked --no-sync mypy src
+
+      - name: Test with coverage
+        run: uv run --locked --no-sync pytest

@@ -23,10 +23,10 @@ from .embeddings import (
     make_embedder,
     store_embeddings,
 )
+from .enrichment_storage import persist_enrichment
 from .llm import LLMProvider, make_provider
 from .prompts import ENRICH_SYSTEM, build_enrich_prompt
-
-STAGE_ORDER = ["attachments", "enrich", "embed"]
+from .stages import STAGE_ORDER
 
 
 @dataclass
@@ -61,7 +61,11 @@ def _reset_stale_running(conn: sqlite3.Connection, max_age_seconds: int = 3600) 
 
 
 def _claim_job(conn: sqlite3.Connection, job_id: int) -> bool:
-    """Atomically claim a pending/failed job for processing."""
+    """Atomically mark a pending/failed job as running.
+
+    The caller commits immediately after claiming so this helper does not
+    commit unrelated work on a caller-owned connection.
+    """
     cur = conn.execute(
         "UPDATE pipeline_jobs SET status = 'running', updated_at = ? "
         "WHERE id = ? AND status IN ('pending', 'failed')",
@@ -83,107 +87,18 @@ def _pending_jobs(
 
 
 def store_enrichment(conn: sqlite3.Connection, email_id: int, result: EnrichmentResult) -> None:
-    account_row = conn.execute("SELECT account FROM emails WHERE id = ?", (email_id,)).fetchone()
-    account = account_row["account"] if account_row else "default"
-
-    conn.execute(
-        "UPDATE emails SET language = ?, summary = ?, importance = ?, sentiment = ?, "
-        "enriched_at = ? WHERE id = ?",
-        (
-            result.language,
-            sanitize_text(result.summary),
-            result.importance,
-            result.sentiment,
-            _now(),
-            email_id,
-        ),
-    )
-    # Re-enrichment replaces previous knowledge rows for the email.
-    conn.execute("DELETE FROM action_items WHERE email_id = ?", (email_id,))
-    conn.execute("DELETE FROM facts WHERE email_id = ?", (email_id,))
-    conn.execute("DELETE FROM email_entities WHERE email_id = ?", (email_id,))
-
-    for item in result.action_items:
-        description = sanitize_text(item.description)
-        cur = conn.execute(
-            "INSERT INTO action_items (email_id, description, owner, due_date, account) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (email_id, description, item.owner, item.due_date, account),
-        )
-        emit(
-            conn,
-            "action_item_created",
-            email_id,
-            {
-                "action_item_id": cur.lastrowid,
-                "description": description,
-                "owner": item.owner,
-                "due_date": item.due_date,
-            },
-            account=account,
-        )
-    for fact in result.facts:
-        fact_text = sanitize_text(fact.fact)
-        cur = conn.execute(
-            "INSERT INTO facts (email_id, fact, category, due_date, confidence, account) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (email_id, fact_text, fact.category, fact.due_date, fact.confidence, account),
-        )
-        emit(
-            conn,
-            "fact_extracted",
-            email_id,
-            {
-                "fact_id": cur.lastrowid,
-                "fact": fact_text,
-                "category": fact.category,
-                "due_date": fact.due_date,
-            },
-            account=account,
-        )
-    emit(
-        conn,
-        "email_enriched",
-        email_id,
-        {
-            "importance": result.importance,
-            "sentiment": result.sentiment,
-            "summary": sanitize_text(result.summary),
-            "language": result.language,
-        },
-        account=account,
-    )
-    entity_lists = [
-        ("person", result.entities.people),
-        ("company", result.entities.companies),
-        ("project", result.entities.projects),
-        ("topic", result.entities.topics),
-    ]
-    for etype, names in entity_lists:
-        for name in names:
-            name = name.strip()
-            if not name:
-                continue
-            norm = name.lower()
-            conn.execute(
-                "INSERT OR IGNORE INTO entities (type, name, name_norm) VALUES (?, ?, ?)",
-                (etype, name, norm),
-            )
-            entity_id = conn.execute(
-                "SELECT id FROM entities WHERE type = ? AND name_norm = ?", (etype, norm)
-            ).fetchone()["id"]
-            conn.execute(
-                "INSERT OR IGNORE INTO email_entities (email_id, entity_id) VALUES (?, ?)",
-                (email_id, entity_id),
-            )
+    """Replace one email's knowledge projections using the pipeline clock."""
+    persist_enrichment(conn, email_id, result, _now, emit, sanitize_text)
 
 
 def run_attachments_stage(conn: sqlite3.Connection, cfg: Config, limit: int) -> tuple[int, int]:
     _reset_stale_running(conn)
+    conn.commit()
     done = failed = 0
     for job in _pending_jobs(conn, "attachments", cfg.enrich.max_attempts, limit):
         if not _claim_job(conn, job["job_id"]):
             continue
+        conn.commit()
         try:
             extract_email_attachments(conn, job["id"], cfg.maildir.path)
             _mark(conn, job["job_id"], "done")
@@ -199,6 +114,7 @@ def run_enrich_stage(
     conn: sqlite3.Connection, cfg: Config, limit: int, provider: LLMProvider | None = None
 ) -> tuple[int, int]:
     _reset_stale_running(conn)
+    conn.commit()
     jobs = _pending_jobs(conn, "enrich", cfg.enrich.max_attempts, limit)
     if not jobs:
         return 0, 0
@@ -207,6 +123,7 @@ def run_enrich_stage(
     for job in jobs:
         if not _claim_job(conn, job["job_id"]):
             continue
+        conn.commit()
         try:
             prompt = build_enrich_prompt(conn, job, cfg.llm)
             raw = provider.complete_json(ENRICH_SYSTEM, prompt)
@@ -225,6 +142,7 @@ def run_embed_stage(
     conn: sqlite3.Connection, cfg: Config, limit: int, embedder: Embedder | None = None
 ) -> tuple[int, int]:
     _reset_stale_running(conn)
+    conn.commit()
     # Only embed after enrichment so the summary is part of the vector; emails
     # whose enrich job terminally failed still get embedded (body-only).
     jobs = conn.execute(
@@ -232,7 +150,8 @@ def run_embed_stage(
         "JOIN emails e ON e.id = j.email_id "
         "WHERE j.stage = 'embed' AND j.status IN ('pending', 'failed') AND j.attempts < ? "
         "AND NOT EXISTS (SELECT 1 FROM pipeline_jobs j2 WHERE j2.email_id = j.email_id "
-        "  AND j2.stage = 'enrich' AND j2.status IN ('pending', 'failed') AND j2.attempts < ?) "
+        "  AND j2.stage = 'enrich' AND j2.status IN ('pending', 'failed', 'running') "
+        "  AND j2.attempts < ?) "
         "ORDER BY e.date_utc DESC LIMIT ?",
         (cfg.enrich.max_attempts, cfg.enrich.max_attempts, limit),
     ).fetchall()
@@ -248,6 +167,7 @@ def run_embed_stage(
         claimed = [j for j in batch if _claim_job(conn, j["job_id"])]
         if not claimed:
             continue
+        conn.commit()
         texts = [embedding_input(j, cfg.embeddings.max_chars) for j in claimed]
         try:
             vectors = embedder.embed_documents(texts)
@@ -270,6 +190,13 @@ def run_pipeline(
     provider: LLMProvider | None = None,
     embedder: Embedder | None = None,
 ) -> PipelineStats:
+    if conn.in_transaction:
+        raise RuntimeError(
+            "run_pipeline requires a clean connection; commit or rollback caller changes first"
+        )
+    unknown_stages = sorted(set(cfg.enrich.stages) - set(STAGE_ORDER))
+    if unknown_stages:
+        raise ValueError(f"unknown enrichment stage(s): {', '.join(unknown_stages)}")
     stats = PipelineStats()
     runners = {
         "attachments": lambda: run_attachments_stage(conn, cfg, limit),

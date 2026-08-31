@@ -59,6 +59,8 @@ def test_get_thread_and_search_threads(conn, cfg):
     hits = search_threads(conn, "kubernetes")
     assert hits[0]["thread_id"] == tid
     assert hits[0]["matching_messages"] == 2
+    assert search_threads(conn, '""') == []
+    assert search_threads(conn, "!!!") == []
 
 
 def test_get_stats(conn, cfg):

@@ -28,12 +28,18 @@ def parse_json_response(text: str) -> dict[str, Any]:
     text = _FENCE.sub("", text.strip()).strip()
     # Some models wrap JSON in prose; grab the outermost object as a fallback.
     try:
-        return cast(dict[str, Any], json.loads(text))
+        value = json.loads(text)
     except json.JSONDecodeError:
         start, end = text.find("{"), text.rfind("}")
         if start == -1 or end <= start:
             raise LLMError(f"No JSON object in LLM response: {text[:200]!r}") from None
-        return cast(dict[str, Any], json.loads(text[start : end + 1]))
+        try:
+            value = json.loads(text[start : end + 1])
+        except json.JSONDecodeError as exc:
+            raise LLMError(f"Invalid JSON object in LLM response: {text[:200]!r}") from exc
+    if not isinstance(value, dict):
+        raise LLMError("LLM response must be a JSON object")
+    return cast(dict[str, Any], value)
 
 
 class OpenAICompatProvider:

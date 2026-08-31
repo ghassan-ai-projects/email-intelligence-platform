@@ -83,22 +83,35 @@ def get_events_since(
     sql += " ORDER BY id LIMIT ?"
     params.append(limit)
 
-    rows = conn.execute(sql, params).fetchall()
-    events = [
-        {
-            "id": r["id"],
-            "type": r["type"],
-            "email_id": r["email_id"],
-            "payload": json.loads(r["payload"]),
-            "account": r["account"],
-            "created_at": r["created_at"],
-        }
-        for r in rows
-    ]
-    latest = conn.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()[0]
+    started_transaction = not conn.in_transaction
+    if started_transaction:
+        conn.execute("BEGIN")
+    try:
+        # Read the watermark first and fetch rows from the same snapshot. A
+        # commit between independent snapshots must not advance the cursor
+        # past an event that this call could not return.
+        latest = conn.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()[0]
+        rows = conn.execute(sql, params).fetchall()
+        events = [
+            {
+                "id": r["id"],
+                "type": r["type"],
+                "email_id": r["email_id"],
+                "payload": json.loads(r["payload"]),
+                "account": r["account"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+        next_cursor = events[-1]["id"] if events else cursor
+        if types and len(events) < limit:
+            next_cursor = latest
+    finally:
+        if started_transaction:
+            conn.rollback()
     return {
         "events": events,
-        "next_cursor": events[-1]["id"] if events else cursor,
+        "next_cursor": next_cursor,
         "latest_cursor": latest,
         "has_more": len(events) == limit,
     }

@@ -155,6 +155,11 @@ def find_waiting_replies(
         "JOIN threads t ON t.id = e.thread_id "
         "WHERE e.is_sent = 1 AND e.date_utc = t.last_date AND t.last_date <= ? "
         "AND t.message_count >= 1 "
+        "AND NOT EXISTS ("
+        "SELECT 1 FROM emails inbound "
+        "WHERE inbound.thread_id = e.thread_id AND inbound.is_sent = 0 "
+        "AND inbound.date_utc >= e.date_utc"
+        ") "
         "ORDER BY t.last_date DESC LIMIT ?",
         (cutoff, max(1, min(limit, 100))),
     ).fetchall()

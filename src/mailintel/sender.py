@@ -14,11 +14,11 @@ import smtplib
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from email.utils import getaddresses
+from email.utils import parseaddr
 from pathlib import Path
 
 from .config import Config
-from .enrich.attachments import load_attachment
+from .attachment_store import load_attachment
 from .events import emit
 from .security import recipient_allowed
 
@@ -27,19 +27,18 @@ class SendError(RuntimeError):
     pass
 
 
-def _now() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+class SendOutcomeUnknown(SendError):
+    """SMTP may have accepted some or all mail, so automatic retry is unsafe."""
 
 
 def check_send_rate(conn: sqlite3.Connection, cfg: Config) -> None:
-    """Block if successful send_email/send_draft calls in the last hour exceed the cap."""
+    """Block if durable send reservations in the last hour exceed the cap."""
     cap = cfg.smtp.max_sends_per_hour
     if cap <= 0:
         return
     since = (datetime.now(UTC) - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
     count = conn.execute(
-        "SELECT COUNT(*) FROM audit_log WHERE tool IN ('send_email', 'send_draft') "
-        "AND created_at > ? AND error IS NULL",
+        "SELECT COUNT(*) FROM send_rate_slots WHERE created_at > ? AND status = 'reserved'",
         (since,),
     ).fetchone()[0]
     if count >= cap:
@@ -48,19 +47,76 @@ def check_send_rate(conn: sqlite3.Connection, cfg: Config) -> None:
         )
 
 
+def _reserve_send_slot(conn: sqlite3.Connection, cfg: Config) -> int | None:
+    """Reserve one send slot atomically before contacting SMTP."""
+    if cfg.smtp.max_sends_per_hour <= 0:
+        return None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        check_send_rate(conn, cfg)
+        cursor = conn.execute(
+            "INSERT INTO send_rate_slots (created_at, status) VALUES (?, 'reserved')",
+            (datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def _release_send_slot(conn: sqlite3.Connection, reservation_id: int | None, error: str) -> None:
+    """Release a reservation only when SMTP failed before delivery."""
+    if reservation_id is None:
+        return
+    conn.execute(
+        "UPDATE send_rate_slots SET status = 'failed', error = ? WHERE id = ?",
+        (error[:500], reservation_id),
+    )
+    conn.commit()
+
+
 def _validated_recipients(raw: list[str], allowed: list[str]) -> list[str]:
-    parsed = getaddresses(raw)
-    addrs = [a for _, a in parsed if a]
-    if len(addrs) != len([r for r in raw if r.strip()]):
-        dropped = [r for r, (_, a) in zip(raw, parsed, strict=True) if r.strip() and not a]
-        raise SendError(f"Invalid recipient addresses: {', '.join(dropped)}")
+    addrs: list[str] = []
+    invalid: list[str] = []
+    for value in raw:
+        if not value.strip():
+            continue
+        value = value.strip()
+        display_name, address = parseaddr(value)
+        local, separator, domain = address.rpartition("@")
+        has_angle_form = "<" in value or ">" in value
+        angle_form_valid = (
+            value.endswith(">")
+            and value.count("<") == 1
+            and value.count(">") == 1
+            and value[: value.index("<")].strip()
+            and value[value.index("<") + 1 : -1] == address
+            and bool(display_name or value.startswith("<"))
+        )
+        if (
+            not address
+            or not separator
+            or not local
+            or not domain
+            or address.count("@") != 1
+            or any(char.isspace() for char in address)
+            or (has_angle_form and not angle_form_valid)
+            or (not has_angle_form and value != address)
+        ):
+            invalid.append(value)
+            continue
+        addrs.append(address)
+    if invalid:
+        raise SendError(f"Invalid recipient addresses ({len(invalid)} invalid)")
     if not addrs:
         raise SendError("No valid recipient addresses given")
     for addr in addrs:
         if not recipient_allowed(addr, allowed):
             raise SendError(
-                f"Recipient '{addr}' is not covered by smtp.allowed_recipients — "
-                f"refusing to send (guardrail against injected exfiltration)"
+                "A recipient is not covered by smtp.allowed_recipients — "
+                "refusing to send (guardrail against injected exfiltration)"
             )
     return addrs
 
@@ -155,11 +211,34 @@ def send_email(
             )
             attached.append(path.name)
 
-    with smtplib.SMTP(smtp.host, smtp.port, timeout=60) as server:
-        if smtp.starttls:
-            server.starttls()
-        server.login(username, password)
-        server.send_message(msg)
+    reservation_id = _reserve_send_slot(conn, cfg)
+    refused: dict[str, tuple[int, bytes]] = {}
+    delivery_attempted = False
+    try:
+        with smtplib.SMTP(smtp.host, smtp.port, timeout=60) as server:
+            if smtp.starttls:
+                server.starttls()
+            server.login(username, password)
+            delivery_attempted = True
+            refused = server.send_message(msg) or {}
+    except Exception as exc:
+        if delivery_attempted:
+            raise SendOutcomeUnknown(
+                "SMTP delivery was attempted but the outcome is unknown; "
+                "do not retry automatically"
+            ) from exc
+        _release_send_slot(conn, reservation_id, str(exc))
+        raise
+
+    if refused:
+        recipient_count = len(set(to_addrs + cc_addrs))
+        if len(refused) == recipient_count:
+            _release_send_slot(conn, reservation_id, "all recipients refused")
+            raise SendError("SMTP refused all recipients; no message was accepted")
+        raise SendOutcomeUnknown(
+            f"SMTP partially refused {len(refused)} of {recipient_count} recipients; "
+            "delivery outcome is unknown, do not retry automatically"
+        )
 
     # Use the account of the email being replied to, if any, otherwise default.
     account = "default"

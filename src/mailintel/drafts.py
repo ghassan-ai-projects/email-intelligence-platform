@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from .config import Config
 from .events import emit
 from .security import sanitize_text
-from .sender import SendError, send_email
+from .sender import SendError, SendOutcomeUnknown, send_email
+
+SEND_CLAIM_TIMEOUT = timedelta(hours=1)
 
 
 def _now() -> str:
@@ -141,6 +143,30 @@ def delete_draft(conn: sqlite3.Connection, draft_id: int) -> dict:
     return {"draft_id": draft_id, "status": "deleted"}
 
 
+def reconcile_sending_draft(conn: sqlite3.Connection, draft_id: int) -> dict:
+    """Mark an abandoned SMTP claim as unknown without retrying delivery."""
+    row = conn.execute(
+        "SELECT status, updated_at FROM drafts WHERE id = ?", (draft_id,)
+    ).fetchone()
+    if not row:
+        return {"error": f"draft {draft_id} not found"}
+    if row["status"] != "sending":
+        return {"draft_id": draft_id, "status": row["status"]}
+    try:
+        updated_at = datetime.strptime(row["updated_at"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+    except (TypeError, ValueError):
+        updated_at = datetime.min.replace(tzinfo=UTC)
+    if datetime.now(UTC) - updated_at < SEND_CLAIM_TIMEOUT:
+        return {"error": f"draft {draft_id} is still in progress"}
+    now = _now()
+    conn.execute(
+        "UPDATE drafts SET status = 'unknown', updated_at = ? WHERE id = ? AND status = 'sending'",
+        (now, draft_id),
+    )
+    conn.commit()
+    return {"error": f"draft {draft_id} send outcome is unknown; do not retry automatically"}
+
+
 def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
     # Atomically claim the draft so concurrent sends can't double-send.
     cur = conn.execute(
@@ -155,7 +181,13 @@ def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
             return {"error": f"draft {draft_id} not found"}
         if row["status"] == "sent":
             return {"error": f"draft {draft_id} was already sent at {row['sent_at']}"}
+        if row["status"] == "sending":
+            return reconcile_sending_draft(conn, draft_id)
         return {"error": f"draft {draft_id} is not in a sendable state ({row['status']})"}
+    # Make the claim durable before handing control to SMTP. If the process
+    # crashes after delivery but before the success update, the draft remains
+    # visibly in-flight instead of becoming silently retryable.
+    conn.commit()
     row = conn.execute("SELECT * FROM drafts WHERE id = ?", (draft_id,)).fetchone()
     assert row is not None
     draft = _row_to_dict(row)
@@ -170,6 +202,13 @@ def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
             attachment_ids=draft["attachment_ids"] or None,
             in_reply_to_email_id=draft["in_reply_to_email_id"],
         )
+    except SendOutcomeUnknown as exc:
+        conn.execute(
+            "UPDATE drafts SET status = 'unknown', updated_at = ? WHERE id = ?",
+            (_now(), draft_id),
+        )
+        conn.commit()
+        return {"error": str(exc), "draft_id": draft_id}
     except SendError as exc:
         # Roll back the claim so the draft can be retried.
         conn.execute(
@@ -178,6 +217,16 @@ def send_draft(conn: sqlite3.Connection, cfg: Config, draft_id: int) -> dict:
         )
         conn.commit()
         return {"error": str(exc), "draft_id": draft_id}
+    except Exception as exc:
+        # A transport or persistence failure after claiming the draft may have
+        # happened after SMTP accepted the message. Do not make that outcome
+        # silently retryable; require deliberate reconciliation instead.
+        conn.execute(
+            "UPDATE drafts SET status = 'unknown', updated_at = ? WHERE id = ?",
+            (_now(), draft_id),
+        )
+        conn.commit()
+        return {"error": f"send outcome unknown: {exc}", "draft_id": draft_id}
     now = _now()
     conn.execute(
         "UPDATE drafts SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?",

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from mailintel import mcp_server
+from mailintel.mcp_tools import runtime
 from mailintel.enrich.pipeline import run_pipeline
 from mailintel.ingest import ingest
-from tests.test_enrich import FakeEmbedder, FakeProvider
+from tests.fakes import FakeEmbedder, FakeProvider
 
 
 @pytest.fixture
@@ -15,7 +21,7 @@ def served(conn, cfg, monkeypatch):
     ingest(conn, cfg)
     run_pipeline(conn, cfg, provider=FakeProvider(), embedder=FakeEmbedder())
     conn.commit()
-    monkeypatch.setattr(mcp_server, "_config", cfg)
+    monkeypatch.setattr(runtime, "_config", cfg)
     return cfg
 
 
@@ -23,13 +29,14 @@ def test_tools_registered():
     import anyio
 
     tools = anyio.run(mcp_server.mcp.list_tools)
-    names = {t.name for t in tools}
-    assert {
+    assert [tool.name for tool in tools] == [
         "search_emails",
         "semantic_search",
         "related_emails",
         "get_email",
         "get_thread",
+        "read_attachment",
+        "send_email",
         "search_threads",
         "find_action_items",
         "find_decisions",
@@ -40,7 +47,50 @@ def test_tools_registered():
         "list_folders",
         "get_stats",
         "sync_now",
-    } <= names
+        "get_events_since",
+        "complete_action_item",
+        "set_importance",
+        "tag_email",
+        "untag_email",
+        "list_tags",
+        "add_email_note",
+        "create_draft",
+        "list_drafts",
+        "update_draft",
+        "delete_draft",
+        "scan_email_mcp",
+        "list_contacts",
+        "update_contact_tier",
+        "send_draft",
+    ]
+
+
+def test_mcp_leaf_modules_import_without_facade():
+    root = Path(__file__).parents[1]
+    environment = {**os.environ, "PYTHONPATH": str(root / "src")}
+    for module in (
+        "mailintel.mcp_tools.runtime",
+        "mailintel.mcp_tools.search",
+        "mailintel.mcp_tools.details",
+        "mailintel.mcp_tools.http",
+        "mailintel.mcp_tools.knowledge",
+        "mailintel.mcp_tools.drafts",
+        "mailintel.mcp_tools.agent_loop",
+    ):
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import importlib, sys; importlib.import_module(sys.argv[1]); "
+                "assert 'mailintel.mcp_server' not in sys.modules",
+                module,
+            ],
+            cwd=root,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
 
 def test_search_emails_tool(served):

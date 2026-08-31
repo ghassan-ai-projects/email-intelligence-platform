@@ -8,7 +8,11 @@ import time
 import typer
 
 from . import db
+from .cli_setup import CONFIG_TEMPLATE as _config_template
+from .cli_setup import initialize_config
 from .config import DEFAULT_CONFIG_DIR, Config, config_path, load_config
+
+CONFIG_TEMPLATE = _config_template
 
 app = typer.Typer(
     name="mailintel",
@@ -16,42 +20,6 @@ app = typer.Typer(
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
-
-CONFIG_TEMPLATE = """\
-# mailintel configuration. Secrets stay in ~/.mailintel/.env (auto-loaded):
-#   EMAIL_USER / EMAIL_PASSWORD, DEEPSEEK_API_KEY, VOYAGE_API_KEY, ...
-# See config.example.toml in the repo for every option (Ollama embeddings,
-# SMTP sending with guardrails, GMX folder names, ...).
-
-[storage]
-db_path = "{db_path}"
-
-[maildir]
-path = "~/Mail"                     # or set MAILINTEL_MAILDIR
-sent_folders = ["Sent", "Sent Mail", "Sent Messages", "Sent Items", "Gesendet"]
-exclude_folders = ["Trash", "Spam", "Junk", "Drafts", "Papierkorb", "Entwürfe"]
-
-[sync]
-command = "mbsync -a"
-interval_minutes = 5
-
-[llm]
-provider = "openai-compat"          # or "anthropic"
-base_url = "https://api.deepseek.com"
-model = "deepseek-chat"
-api_key_env = "DEEPSEEK_API_KEY"
-
-[embeddings]
-provider = "voyage"                 # or "openai-compat" (e.g. local Ollama)
-model = "voyage-3.5-lite"
-api_key_env = "VOYAGE_API_KEY"
-dimensions = 1024
-
-[smtp]
-enabled = false                     # opt-in: allows the send_email MCP tool
-host = ""
-allowed_recipients = []             # guardrail, e.g. ["*@mycompany.com"]
-"""
 
 
 def _cfg() -> Config:
@@ -65,24 +33,7 @@ def _echo_json(data: object) -> None:
 @app.command()
 def init() -> None:
     """Create ~/.mailintel/config.toml and print setup guidance."""
-    path = config_path()
-    if path.exists():
-        typer.echo(f"Config already exists: {path}")
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(CONFIG_TEMPLATE.format(db_path=str(DEFAULT_CONFIG_DIR / "mail.db")))
-        typer.echo(f"Wrote {path}")
-    typer.echo(
-        "\nNext steps:\n"
-        "  1. Install mbsync:        brew install isync\n"
-        "  2. Configure ~/.mbsyncrc  (see docs/mbsync-setup.md in the repo)\n"
-        "  3. Edit the [maildir] path in the config to your mbsync target\n"
-        "     (or set the MAILINTEL_MAILDIR environment variable)\n"
-        "  4. Put secrets in ~/.mailintel/.env — EMAIL_USER, EMAIL_PASSWORD,\n"
-        "     DEEPSEEK_API_KEY (or your provider), VOYAGE_API_KEY\n"
-        "  5. Run:                   mailintel sync && mailintel enrich\n"
-        "  6. Register MCP server:   claude mcp add mailintel -- mailintel serve"
-    )
+    initialize_config(config_path(), DEFAULT_CONFIG_DIR, CONFIG_TEMPLATE)
 
 
 @app.command()
@@ -91,22 +42,14 @@ def sync(
     limit: int = typer.Option(200, help="Max enrichment jobs per stage."),
 ) -> None:
     """Run mbsync, ingest new mail, then (optionally) enrich."""
-    from .enrich.pipeline import run_pipeline
-    from .ingest import ingest as run_ingest
-    from .sync import run_sync
+    from .sync_cycle import run_sync_cycle
 
     cfg = _cfg()
     typer.echo(f"Running: {cfg.sync.command}")
-    run_sync(cfg)
-    conn = db.connect(cfg.storage.db_path)
-    try:
-        stats = run_ingest(conn, cfg)
-        typer.echo(f"Ingest: {stats.as_dict()}")
-        if enrich_after:
-            pstats = run_pipeline(conn, cfg, limit=limit)
-            typer.echo(f"Enrich: {pstats.as_dict()}")
-    finally:
-        conn.close()
+    cycle = run_sync_cycle(cfg, enrich=enrich_after, limit=limit)
+    typer.echo(f"Ingest: {cycle.ingest.as_dict()}")
+    if cycle.enrich is not None:
+        typer.echo(f"Enrich: {cycle.enrich.as_dict()}")
 
 
 @app.command()
@@ -115,11 +58,8 @@ def ingest() -> None:
     from .ingest import ingest as run_ingest
 
     cfg = _cfg()
-    conn = db.connect(cfg.storage.db_path)
-    try:
+    with db.connection(cfg.storage.db_path) as conn:
         stats = run_ingest(conn, cfg)
-    finally:
-        conn.close()
     _echo_json(stats.as_dict())
 
 
@@ -135,11 +75,8 @@ def enrich(
     if stage:
         cfg = cfg.model_copy(deep=True)
         cfg.enrich.stages = [stage]
-    conn = db.connect(cfg.storage.db_path)
-    try:
+    with db.connection(cfg.storage.db_path) as conn:
         stats = run_pipeline(conn, cfg, limit=limit)
-    finally:
-        conn.close()
     _echo_json(stats.as_dict())
 
 
@@ -160,9 +97,8 @@ def serve(
 @app.command()
 def watch() -> None:
     """Loop forever: sync + ingest + enrich every sync.interval_minutes."""
-    from .enrich.pipeline import run_pipeline
-    from .ingest import ingest as run_ingest
-    from .sync import SyncError, run_sync
+    from .sync import SyncError
+    from .sync_cycle import run_sync_cycle
 
     cfg = _cfg()
     interval = max(1, cfg.sync.interval_minutes) * 60
@@ -170,17 +106,13 @@ def watch() -> None:
     while True:
         started = time.monotonic()
         try:
-            run_sync(cfg)
-            conn = db.connect(cfg.storage.db_path)
-            try:
-                istats = run_ingest(conn, cfg)
-                pstats = run_pipeline(conn, cfg, limit=200)
-            finally:
-                conn.close()
-            if istats.new or istats.deleted or pstats.done:
+            cycle = run_sync_cycle(cfg, enrich=True, limit=200)
+            if cycle.ingest.new or cycle.ingest.deleted or (
+                cycle.enrich is not None and cycle.enrich.done
+            ):
                 typer.echo(
-                    f"[{time.strftime('%H:%M:%S')}] ingest={istats.as_dict()} "
-                    f"enrich={pstats.as_dict()}"
+                    f"[{time.strftime('%H:%M:%S')}] ingest={cycle.ingest.as_dict()} "
+                    f"enrich={cycle.enrich.as_dict() if cycle.enrich else {}}"
                 )
         except SyncError as exc:
             typer.echo(f"[{time.strftime('%H:%M:%S')}] sync error: {exc}", err=True)
@@ -201,8 +133,7 @@ def search(
     from . import search as search_mod
 
     cfg = _cfg()
-    conn = db.connect(cfg.storage.db_path)
-    try:
+    with db.connection(cfg.storage.db_path) as conn:
         if semantic:
             from .enrich.embeddings import knn_email_ids, make_embedder
 
@@ -215,8 +146,6 @@ def search(
                     results.append(search_mod.email_row_brief(row, {"distance": round(dist, 4)}))
         else:
             results = search_mod.search_emails(conn, query=query, limit=limit)
-    finally:
-        conn.close()
     _echo_json(results)
 
 
@@ -226,11 +155,8 @@ def stats() -> None:
     from .search import get_stats
 
     cfg = _cfg()
-    conn = db.connect(cfg.storage.db_path)
-    try:
+    with db.connection(cfg.storage.db_path) as conn:
         _echo_json(get_stats(conn))
-    finally:
-        conn.close()
 
 
 @app.command()
@@ -242,11 +168,8 @@ def contacts_import(
 ) -> None:
     """Import contacts from a JSON file into the contacts table."""
     cfg = _cfg()
-    conn = db.connect(cfg.storage.db_path)
-    try:
-        count = db.import_contacts_json(conn, path)
-    finally:
-        conn.close()
+    with db.connection(cfg.storage.db_path) as conn:
+        count = db.import_contacts_json(conn, path or cfg.guardrail.contacts_path)
     typer.echo(f"Imported {count} contacts")
 
 
@@ -257,8 +180,7 @@ def audit(
 ) -> None:
     """Inspect the MCP tool audit log."""
     cfg = _cfg()
-    conn = db.connect(cfg.storage.db_path)
-    try:
+    with db.connection(cfg.storage.db_path) as conn:
         if tool:
             rows = conn.execute(
                 "SELECT id, tool, args, caller, account, result_summary, error, created_at "
@@ -271,8 +193,6 @@ def audit(
                 "FROM audit_log ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
-    finally:
-        conn.close()
     _echo_json([dict(r) for r in rows])
 
 
@@ -284,11 +204,8 @@ def events_prune(
     from .events import prune_events
 
     cfg = _cfg()
-    conn = db.connect(cfg.storage.db_path)
-    try:
+    with db.connection(cfg.storage.db_path) as conn:
         deleted = prune_events(conn, before_id)
-    finally:
-        conn.close()
     typer.echo(f"Deleted {deleted} events")
 
 
