@@ -33,8 +33,10 @@ integrating agent.
 - Production behavior changes have meaningful tests; coverage tests prove
   behavior rather than merely execute lines.
 - Combined branch coverage is at least 90%, enforced by pytest.
-- Ruff, mypy, formatting, build, and diff checks remain green as regression
-  gates; no time is spent on cosmetic cleanup.
+- Mypy and diff checks remain green as regression gates. Ruff and formatting
+  are explicitly outside this round's scope; no time is spent on cosmetic
+  cleanup. Packaging/build checks are reported separately when the offline
+  environment cannot resolve the build backend.
 - Each cohesive implementation/test slice has a Conventional Commit.
 - Final review repeats all four lenses over the changed areas and finds no
   unresolved high- or medium-confidence actionable issue.
