@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 6 assessed baseline files
+- Completed files: 7 refactored baseline files plus 7 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 13
+- Candidate reviews received: 14
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -306,3 +306,22 @@ result, and any deferred behavior or feature notes.
 - Bar result: PASS (assessed, no code change). Stronger address normalization,
   timeout/config hardening, attachment caps, or an outbox require a separate
   security and delivery design.
+
+## `src/mailintel/enrich/embeddings.py` — candidate, implementation, review
+
+- Baseline: 152 lines; the file is one cohesive embedding boundary covering
+  provider protocols/factories, lazy SDK loading, vector serialization and
+  metadata, input shaping, storage, and KNN lookup.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting providers from vector storage would add coupling and public import
+  risk without a size or ownership need.
+- Implementation: no production code change. Provider errors and request
+  parameters, dimension validation, sqlite-vec DDL/meta behavior, input order
+  and truncation, storage replacement, KNN ordering, and no-such-table fallback
+  remain unchanged.
+- Review findings: no actionable findings. Pipeline, CLI, MCP search, and test
+  import paths were checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). A provider registry, vector
+  validation, retry policy, or metadata migration needs a separate design.

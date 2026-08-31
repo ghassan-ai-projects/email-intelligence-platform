@@ -18,7 +18,7 @@ files are intentionally excluded.
 | Assessed (no change) | 203 | `src/mailintel/guardrail/contacts.py` |
 | Assessed (no change) | 199 | `src/mailintel/drafts.py` |
 | Assessed (no change) | 192 | `src/mailintel/sender.py` |
-| Pending | 152 | `src/mailintel/enrich/embeddings.py` |
+| Assessed (no change) | 152 | `src/mailintel/enrich/embeddings.py` |
 | Pending | 114 | `src/mailintel/enrich/attachments.py` |
 | Pending | 109 | `src/mailintel/guardrail/scanner_wrapper.py` |
 | Pending | 107 | `src/mailintel/actions.py` |
