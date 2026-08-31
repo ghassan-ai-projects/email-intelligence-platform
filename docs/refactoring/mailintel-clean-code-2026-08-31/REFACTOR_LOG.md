@@ -7,9 +7,9 @@ and bar check. Tests remain deferred until the final gate.
 
 - Branch: `codex/refactor-mailintel-clean-code-20260831`
 - Baseline: `75d2247`
-- Completed files: 7 refactored baseline files plus 13 assessed baseline files
+- Completed files: 7 refactored baseline files plus 14 assessed baseline files
   and 26 focused modules
-- Candidate reviews received: 20
+- Candidate reviews received: 21
 - Production commits: 7
 - Tests run: 0 (intentional)
 
@@ -436,3 +436,21 @@ result, and any deferred behavior or feature notes.
   `git diff --check` passed. Tests were not run by design.
 - Bar result: PASS (assessed, no code change). Structured validation,
   retry/backoff, timeout policy, and provider registry require separate design.
+
+## `src/mailintel/enrich/prompts.py` — candidate, implementation, review
+
+- Baseline: 78 lines; the file is a cohesive enrichment-prompt boundary with
+  one system contract and one DB-backed prompt builder.
+- Candidate reviewer: delegated read-only review recommended no code change.
+  Splitting prompt text from construction would add import/patch risk at no
+  practical maintenance benefit.
+- Implementation: no production code change. The system contract, explicit
+  untrusted-content notice, recipient/body/attachment query order, truncation,
+  empty-body fallback, headings, and final joining behavior remain unchanged.
+- Review findings: no actionable findings. Pipeline imports and the security
+  boundary around prompt-injection content were explicitly checked.
+- Checks for the no-change bar: baseline comparison for the file is empty and
+  `git diff --check` passed. Tests were not run by design.
+- Bar result: PASS (assessed, no code change). Delimiters/escaping, attachment
+  budgets, stable SQL ordering, and prompt versioning require a separate model
+  and security design.
